@@ -1,0 +1,35 @@
+services:
+
+  frontend:
+    build:
+      context: ./frontend
+      target: dev          # 개발 시 dev 스테이지 사용
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app    # 소스 변경 즉시 반영 (HMR)
+      - /app/node_modules  # 컨테이너 내부 node_modules 보호
+    env_file:
+      - .env
+    environment:
+      - NEXT_PUBLIC_KAKAO_MAP_KEY=${KAKAO_MAP_KEY}
+      - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - NEXT_PUBLIC_AI_SERVER_URL=http://ai-server:8000
+    depends_on:
+      - ai-server
+
+  ai-server:
+    build:
+      context: ./ai-server
+      target: dev          # 개발 시 dev 스테이지 사용 (--reload)
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ai-server:/app   # 소스 변경 즉시 반영
+    env_file:
+      - .env
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - MODEL_PATH=/app/models
