@@ -12,3 +12,13 @@ export interface MapCenter {
   lat: number
   lng: number
 }
+
+export type AIAnalyzeStatus = 'valid' | 'invalid'
+
+export interface AIAnalyzeResponse {
+  status: AIAnalyzeStatus
+  confidence_score?: number
+  latency_ms?: number
+  reason?: string
+  message?: string
+}
