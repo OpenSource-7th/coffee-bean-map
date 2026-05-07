@@ -42,9 +42,10 @@ Epic 1: 백엔드 및 인프라 구축 (Supabase)
   - 이메일 인증 메일 템플릿 커스터마이징 (선택)
   - supabase/migrations/20260507000002_auth_profiles.sql
 
-[ ] Feature 1-7. 개발용 시드 데이터
-  - 단국대 근처 스페셜티 카페 샘플 10~20개
-  - menu_tags 다양하게 구성하여 필터 테스트 가능하도록
+[완료] Feature 1-7. 개발용 시드 데이터
+  - 단국대 죽전 캠퍼스 반경 1km 내 스페셜티/독립 카페 12개
+  - menu_tags 8종(아메리카노, 라떼, 카푸치노, 카페모카, 아인슈페너, 핸드드립, 콜드브루, 에스프레소) 구성
+  - 출처: 소상공인시장진흥공단 상가(상권)정보 경기 202603
   - supabase/seed.sql
 
 [ ] Feature 1-8. GitHub Actions CI 파이프라인
