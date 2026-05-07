@@ -35,12 +35,19 @@ Epic 1: 백엔드 및 인프라 구축 (Supabase)
   - frontend/src/hooks/useSubmitReview.ts
   - frontend/src/lib/types.ts에 AIAnalyzeResponse 타입 추가
 
-[ ] Feature 1-6. 개발용 시드 데이터
+[완료] Feature 1-6. Supabase Auth 설정 (이메일/패스워드)
+  - Supabase Authentication 이메일/패스워드 Provider 활성화
+  - users 테이블 확장: auth.users와 public.profiles 연동 (trigger)
+  - reviews 테이블 user_id → auth.uid() FK 연동 및 RLS 정책 갱신
+  - 이메일 인증 메일 템플릿 커스터마이징 (선택)
+  - supabase/migrations/20260507000002_auth_profiles.sql
+
+[ ] Feature 1-7. 개발용 시드 데이터
   - 단국대 근처 스페셜티 카페 샘플 10~20개
   - menu_tags 다양하게 구성하여 필터 테스트 가능하도록
   - supabase/seed.sql
 
-[ ] Feature 1-7. GitHub Actions CI 파이프라인
+[ ] Feature 1-8. GitHub Actions CI 파이프라인
   - lint → test → Docker build 순서
   - main 브랜치 push 시 자동 실행
   - .github/workflows/ci.yml
@@ -96,7 +103,6 @@ Epic 3: 프론트엔드 - 지도 및 필터 구현
   - frontend/src/components/CafeModal.tsx
 
 [ ] Feature 3-4. 필터 결과 0개 UX 처리
-  - "이 지역에는 아직 해당 메뉴를 잘하는 곳이 없네요." 메시지
   - 필터 초기화 버튼
 
 
@@ -104,24 +110,33 @@ Epic 3: 프론트엔드 - 지도 및 필터 구현
 Epic 4: 프론트엔드 - 리뷰 및 AI 연동
 ------------------------------------------------------------
 
-[ ] Feature 4-1. 리뷰 입력 폼 UI
+[ ] Feature 4-1. 로그인/회원가입 UI
+  - 로그인 페이지 (이메일 + 비밀번호 입력, 유효성 검사)
+  - 회원가입 페이지 (이메일 인증 플로우 포함)
+  - 비밀번호 재설정 페이지
+  - Supabase Auth 세션 상태 전역 관리 (useAuth 훅)
+  - 인증 상태에 따른 네비게이션 가드 (비로그인 시 리뷰 작성 차단)
+  - frontend/src/hooks/useAuth.ts
+  - frontend/src/components/AuthModal.tsx (또는 /app/auth/ 페이지)
+
+[ ] Feature 4-2. 리뷰 입력 폼 UI
   - 모달 내 텍스트 입력창
   - 프론트 사전 검증: 3자 이하 / 특수문자만 포함 시 서버 호출 전 차단
   - 이벤트 로깅: review_submitted { length_of_text }
   - frontend/src/components/ReviewForm.tsx
 
-[ ] Feature 4-2. AI 리뷰 평가 파이프라인 연동
+[ ] Feature 4-3. AI 리뷰 평가 파이프라인 연동
   - AI 서버 POST /api/v1/analyze-review 호출
   - 승인 시 Supabase reviews INSERT
   - 반려 시: 입력 텍스트 유지 + "커피와 관련된 내용을 작성해 주세요." 안내
   - 이벤트 로깅: ai_rejected
 
-[ ] Feature 4-3. LocalStorage 북마크 기능
+[ ] Feature 4-4. LocalStorage 북마크 기능
   - 핀 상세 모달에서 북마크 토글
   - LocalStorage에 cafe_id 배열 저장/조회
   - frontend/src/hooks/useBookmark.ts
 
-[ ] Feature 4-4. 내가 쓴 리뷰 모아보기
+[ ] Feature 4-5. 내가 쓴 리뷰 모아보기
   - LocalStorage에서 user_id 기준 리뷰 목록 표시
   - 네트워크 단절 시 LocalStorage 임시 저장 후 복구
 
