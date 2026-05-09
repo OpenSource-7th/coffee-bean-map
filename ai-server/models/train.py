@@ -83,18 +83,18 @@ class ModelTrain:
         self._set_optimizer(config["optimizer"], config["lr"])
 
     @classmethod
-    def load_all_csv_data(cls, directory_path):
+    def load_all_csv_data(cls, directory_path, file_labels):
         df_list = []
 
         for filename in os.listdir(directory_path):
-            if filename.endswith(".csv"):
+            if filename.endswith(".csv") and filename in file_labels:
                 file_path = os.path.join(directory_path, filename)
                 df = pd.read_csv(file_path)
 
-                if "text" in df.columns and "label" in df.columns:
-                    df = df[["text", "label"]]
-
-                df_list.append(df)
+                if "text" in df.columns:
+                    df = df[["text"]].copy()
+                    df["label"] = file_labels[filename]
+                    df_list.append(df)
 
         if not df_list:
             return pd.DataFrame(columns=["text", "label"])
@@ -224,11 +224,22 @@ if __name__ == "__main__":
         "device": "cpu"
     }
 
-    train_data_df = ModelTrain.load_all_csv_data("train_dataset")
+    data_labels = {
+        "coffee_professional_reviews2.csv": 1,
+        "coffee_reviews.csv": 1,
+        "dessert_reviews.csv": 0,
+        "drink_reviews.csv": 0,
+        "employee_reviews.csv": 0,
+        "interio_reviews.csv": 0,
+        "restaurant_reviews.csv": 0,
+        "tmi_reviews.csv": 0
+    }
+    train_data_df = ModelTrain.load_all_csv_data("train_dataset", data_labels)
 
     if not train_data_df.empty:
         texts = train_data_df["text"].tolist()
         labels = train_data_df["label"].tolist()
+        print(f"커피 관련 리뷰 개수: {labels.count(1)}\n커피 관련 없는 리뷰 개수: {labels.count(0)}")
 
         train_texts, valid_texts, train_labels, valid_labels = train_test_split(
             texts, labels, test_size=0.2, random_state=42
@@ -236,6 +247,9 @@ if __name__ == "__main__":
 
         model_trainer = ModelTrain(train_config)
         train_dataset = ReviewDataset(train_texts, train_labels, model_trainer._tokenizer)
-        model_trainer.train(train_dataset, save_config=True, valid=False)
+        valid_dataset = ReviewDataset(valid_texts, valid_labels, model_trainer._tokenizer)
+        print(f"훈련 데이터셋 개수: {len(train_dataset)}\n검증 데이터셋 개수: {len(valid_dataset)}")
+
+        model_trainer.train(train_dataset, save_config=True, valid=True)
     else:
         print("train_dataset 폴더에서 csv 파일들을 찾을 수 없습니다.")
