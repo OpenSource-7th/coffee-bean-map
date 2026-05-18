@@ -6,7 +6,7 @@ Coffee Bean Map — 개발 단계별 작업 목록 (steps.txt)
 Epic 1: 백엔드 및 인프라 구축 (Supabase)
 ------------------------------------------------------------
 
-[수정 필요] Feature 1-1. Supabase DB 스키마 설계 및 인덱스 설정
+[완료] Feature 1-1. Supabase DB 스키마 설계 및 인덱스 설정
   - cafes 테이블에서 menu_tags TEXT[] 제거 (menus 별도 테이블로 분리됨)
   - reviews 테이블에 menu_id FK, sentiment VARCHAR(20), menu_relevance FLOAT 컬럼 추가
   - menus 테이블 신규 생성 (id UUID PK, cafe_id FK, menu_name VARCHAR(100), created_at)
@@ -26,13 +26,13 @@ Epic 1: 백엔드 및 인프라 구축 (Supabase)
   - frontend/src/lib/supabase.ts 싱글톤 클라이언트 생성
   - NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY 연결
 
-[수정 필요] Feature 1-4. 반경 내 카페 목록 조회 함수
+[완료] Feature 1-4. 반경 내 카페 목록 조회 함수
   - ST_DWithin으로 현재 지도 화면 반경 내 카페 fetch (변경 없음)
   - frontend/src/lib/types.ts: Cafe 타입에서 menu_tags 제거
   - frontend/src/hooks/useCafes.ts: 반환 구조 확인 및 타입 동기화
   - supabase/migrations/20260507000001_create_get_cafes_within_radius.sql (RPC 함수)
 
-[수정 필요] Feature 1-5. 리뷰 저장 함수
+[완료] Feature 1-5. 리뷰 저장 함수
   - Binary 분류(confidence >= 0.85) 기준 → 3단계 sentiment(positive/neutral/negative) 기반으로 변경
   - reviews INSERT 시 sentiment, menu_relevance 컬럼 포함
   - frontend/src/lib/types.ts: AIAnalyzeResponse 타입을
@@ -68,18 +68,24 @@ Epic 1: 백엔드 및 인프라 구축 (Supabase)
 Epic 2: AI 추론 서버 구축 (FastAPI)
 ------------------------------------------------------------
 
-[ ] Feature 2-1. KcBERT 모델 Fine-Tuning (3단계 감성 분류)
-  - 학습 데이터: 커피 리뷰 텍스트 + Positive/Neutral/Negative 레이블
-  - menu_relevance 분류기 포함
-  - 악성 프롬프트 패턴 학습 데이터 포함 (Prompt Injection 방어)
+[진행중] Feature 2-1. KcBERT 모델 Fine-Tuning (3단계 감성 분류)
+  - [완료] 학습/검증 데이터셋 구성 (ai-server/models/train_dataset/, valid_dataset/)
+           커피/디저트/음료/직원/인테리어/식당/TMI 리뷰 CSV 7종
+  - [완료] ModelTrain 클래스 구현 (ai-server/models/train.py)
+           Full Fine-Tuning / LoRA 선택, AdamW 옵티마이저, F1 Score 검증
+  - [미완] 현재 모델: 커피 관련 여부 2진 분류 (label 0/1)
+           → 3단계 감성(Positive/Neutral/Negative) + menu_relevance 분류기로 전환 필요
+  - [ ] 악성 프롬프트 패턴 학습 데이터 포함 (Prompt Injection 방어)
   - 목표: Classification Accuracy 90% 이상, False Positive Rate 5% 미만
 
-[ ] Feature 2-2. KcBERT 모델 ONNX 양자화 및 FastAPI 서버 세팅
-  - 파인튜닝 모델 → ONNX 변환 + INT8 양자화
-  - AVX2 최적화 ONNX Runtime 적용
-  - ai-server/models/ 에 .onnx 파일 배치
-  - Gunicorn(멀티 워커) + Uvicorn 서버 설정
-  - Cold Start < 2s 목표
+[진행중] Feature 2-2. KcBERT 모델 ONNX 양자화 및 FastAPI 서버 세팅
+  - [완료] 파인튜닝 모델 → ONNX 변환 + INT8 양자화
+           (ai-server/app/models/onnx_kcbert.py, KAN-3 커밋)
+  - [완료] ai-server/app/models/kcbert_onnx/ 에 .onnx 파일 배치
+           (model.onnx, model_quantized.onnx, tokenizer 파일 일체)
+  - [ ] AVX2 최적화 ONNX Runtime 적용
+  - [ ] Gunicorn(멀티 워커) + Uvicorn 서버 설정
+  - [ ] Cold Start < 2s 목표
 
 [ ] Feature 2-3. /api/v1/analyze-review 엔드포인트 구현
   - Request: { user_id, cafe_id, menu_id, review_text }
@@ -117,11 +123,15 @@ Epic 2: AI 추론 서버 구축 (FastAPI)
 Epic 3: 프론트엔드 - 지도 및 필터 구현
 ------------------------------------------------------------
 
-[ ] Feature 3-1. 카카오 맵 API 연동 및 지도 핀 렌더링
-  - Kakao Map 초기화, 현재 위치 중심 렌더링
-  - 핀 스타일: 기본 / 활성(선택됨)
-  - 마커 클러스터링 (과도한 핀 로딩 방지)
-  - 지도 10km 이상 급이동 시 캐시 초기화 + 백그라운드 재요청
+[진행중] Feature 3-1. 카카오 맵 API 연동 및 지도 핀 렌더링
+  - [완료] Kakao Map 초기화, 현재 위치(죽전 캠퍼스) 중심 렌더링
+           (frontend/src/components/KakaoMap.tsx)
+  - [완료] 지도 dragend → onCenterChanged 콜백으로 중심 좌표 갱신
+  - [완료] 지도 10km 이상 급이동 시 캐시 초기화 + 재요청
+           (frontend/src/hooks/useCafes.ts — LARGE_MOVE_THRESHOLD_METERS)
+  - [완료] 기본 마커 렌더링 및 핀 클릭 → 상세 모달 연결
+  - [ ] 핀 스타일: 활성(선택됨) 상태 구분 (커스텀 마커 이미지)
+  - [ ] 마커 클러스터링 (과도한 핀 로딩 방지)
 
 [ ] Feature 3-2. 클라이언트 사이드 필터링 로직 구현
   - 필터 칩(Pill) UI 컴포넌트 (아메리카노, 라떼, 카푸치노, 핸드드립, 콜드브루 등)

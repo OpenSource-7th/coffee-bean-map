@@ -7,6 +7,7 @@ const AI_SERVER_URL = process.env.NEXT_PUBLIC_AI_SERVER_URL ?? 'http://localhost
 interface SubmitParams {
   cafeId: string
   userId: string
+  menuId: string
   reviewText: string
 }
 
@@ -25,7 +26,7 @@ export function useSubmitReview(): UseSubmitReviewResult {
   const [confidenceScore, setConfidenceScore] = useState<number | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const submit = useCallback(async ({ cafeId, userId, reviewText }: SubmitParams) => {
+  const submit = useCallback(async ({ cafeId, userId, menuId, reviewText }: SubmitParams) => {
     setStatus('loading')
     setConfidenceScore(null)
     setErrorMessage(null)
@@ -37,37 +38,39 @@ export function useSubmitReview(): UseSubmitReviewResult {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: userId,
+          cafe_id: cafeId,
+          menu_id: menuId,
           review_text: reviewText,
-          timestamp: new Date().toISOString(),
         }),
       })
 
-      // 406은 AI 반려 응답이므로 별도 처리, 그 외 에러는 throw
-      if (!aiResponse.ok && aiResponse.status !== 406) {
+      if (!aiResponse.ok) {
         throw new Error(`AI server error: ${aiResponse.status}`)
       }
 
       const aiData: AIAnalyzeResponse = await aiResponse.json()
 
-      // 2. AI 반려 → 입력 텍스트 유지, 안내 메시지 표시
-      if (aiData.status === 'invalid') {
+      if (aiData.status === 'error') {
         setStatus('rejected')
         setErrorMessage('커피와 관련된 내용을 작성해 주세요.')
         return
       }
 
-      // 3. AI 승인 → Supabase INSERT (SDK 파라미터화 쿼리로 SQL 인젝션 차단)
+      // 2. AI 승인 → Supabase INSERT (SDK 파라미터화 쿼리로 SQL 인젝션 차단)
       const { error: dbError } = await supabase.from('reviews').insert({
-        cafe_id: cafeId,
-        user_id: userId,
-        review_text: reviewText,
-        confidence_score: aiData.confidence_score,
+        cafe_id:          cafeId,
+        user_id:          userId,
+        menu_id:          menuId,
+        review_text:      reviewText,
+        sentiment:        aiData.sentiment,
+        confidence_score: aiData.confidence,
+        menu_relevance:   aiData.menu_relevance,
       })
 
       if (dbError) throw new Error(dbError.message)
 
       setStatus('success')
-      setConfidenceScore(aiData.confidence_score ?? null)
+      setConfidenceScore(aiData.confidence)
     } catch (err) {
       setStatus('error')
       setErrorMessage(err instanceof Error ? err.message : 'Unknown error')

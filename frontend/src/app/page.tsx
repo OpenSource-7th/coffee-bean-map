@@ -31,21 +31,6 @@ export default function Home() {
           >
             <p style={{ fontWeight: "bold" }}>{cafe.name}</p>
             <p style={{ fontSize: "12px", color: "#888" }}>{cafe.address}</p>
-            <div style={{ display: "flex", gap: "4px", marginTop: "6px", flexWrap: "wrap" }}>
-              {cafe.menu_tags.map((tag) => (
-                <span
-                  key={tag}
-                  style={{
-                    fontSize: "11px",
-                    padding: "2px 8px",
-                    background: "#f0f0f0",
-                    borderRadius: "999px",
-                  }}
-                >
-                  #{tag}
-                </span>
-              ))}
-            </div>
           </div>
         ))}
       </aside>
@@ -87,21 +72,6 @@ export default function Home() {
             <p style={{ color: "#888", fontSize: "14px", marginBottom: "12px" }}>
               {selectedCafe.address}
             </p>
-            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-              {selectedCafe.menu_tags.map((tag) => (
-                <span
-                  key={tag}
-                  style={{
-                    fontSize: "12px",
-                    padding: "4px 10px",
-                    background: "#f5f0ee",
-                    borderRadius: "999px",
-                  }}
-                >
-                  #{tag}
-                </span>
-              ))}
-            </div>
             <button
               onClick={() => setSelectedCafe(null)}
               style={{
