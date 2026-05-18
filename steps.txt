@@ -16,7 +16,7 @@ Epic 1: 백엔드 및 인프라 구축 (Supabase)
   - btree 인덱스: reviews.cafe_id, reviews.user_id, reviews.created_at DESC
   - btree 인덱스: (menu_id, bayesian_score DESC) on menu_scores
 
-[수정 필요] Feature 1-2. RLS(Row Level Security) 정책 설정
+[완료] Feature 1-2. RLS(Row Level Security) 정책 설정
   - cafes: anon/authenticated 전체 READ 허용, 쓰기 차단 (변경 없음)
   - reviews: anon INSERT → authenticated INSERT (auth.uid() 기준)로 정책 변경
   - menu_scores: authenticated READ 허용
