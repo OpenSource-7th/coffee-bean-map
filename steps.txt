@@ -45,18 +45,23 @@ Epic 1: 백엔드 및 인프라 구축 (Supabase)
   - reviews 테이블 user_id → auth.uid() FK 연동 및 RLS 정책 갱신
   - supabase/migrations/20260507000002_auth_profiles.sql
 
-[수정 필요] Feature 1-7. 개발용 시드 데이터
+[완료] Feature 1-7. 개발용 시드 데이터
   - cafes 시드: menu_tags 제거 (단국대 죽전 캠퍼스 반경 1km 내 카페 12개 유지)
-  - menus 시드 신규 추가: 각 카페별 대표 메뉴 등록
-    (아메리카노, 라떼, 카푸치노, 카페모카, 아인슈페너, 핸드드립, 콜드브루, 에스프레소)
+  - menus 시드 신규 추가: 각 카페별 메뉴 전부 등록
   - 출처: 소상공인시장진흥공단 상가(상권)정보 경기 202603
   - supabase/seed.sql
 
-[ ] Feature 1-8. Background Aggregation Worker
-  - reviews INSERT 후 menu_scores 비동기 집계
-  - Bayesian score 업데이트 로직
-  - 시그니처 메뉴 조건 충족 여부 판단 (minimum review count, positive ratio threshold)
-  - Supabase Database Function 또는 별도 Worker 프로세스
+[완료] Feature 1-8. Background Aggregation Worker
+  - reviews INSERT 후 menu_scores 자동 집계 (PostgreSQL AFTER INSERT Trigger 방식 채택)
+  - update_menu_scores_on_review() 함수: 전체 재계산(COUNT FILTER) 방식
+    weighted_score = (pos*1.0 + neu*0.5 + neg*0.0) / total
+    bayesian_score = (C*m + n*weighted) / (C+n), C=5, m=0.6
+  - 시그니처 메뉴 조건 (함수 내 상수로 정의, 쉽게 변경 가능):
+    MINIMUM_REVIEW_COUNT=5, BAYESIAN_THRESHOLD=0.7, POSITIVE_RATIO=0.6
+  - menu_scores 테이블에 is_signature BOOLEAN 컬럼 추가
+  - 엣지 케이스 처리: menu_id NULL → 즉시 종료, sentiment NULL → 카운트 제외,
+    total=0 → 점수 NULL 유지 UPSERT, 첫 리뷰 → ON CONFLICT UPSERT로 신규 행 생성
+  - supabase/migrations/20260522000001_feature_1_8_menu_scores_trigger.sql
 
 [ ] Feature 1-9. GitHub Actions CI 파이프라인
   - lint → test → Docker build 순서
@@ -103,10 +108,16 @@ Epic 2: AI 추론 서버 구축 (FastAPI)
   - 리뷰 Soft Delete 엔드포인트
   - 신고 처리 API
 
-[ ] Feature 2-5. 관리자 API
-  - 메뉴 추가/수정 (JWT 인증 + RLS)
-  - 리뷰 Soft Delete
-  - 신고 처리
+[진행중] Feature 2-5. 관리자 API
+  - [완료] menus INSERT/DELETE RLS 정책 추가 (authenticated 사용자 대상, 개발 단계용)
+           supabase/migrations/20260518000003_menus_admin_insert.sql
+           supabase/migrations/20260518000004_menus_admin_delete.sql
+  - [완료] 관리자 프론트엔드 페이지 구현 (frontend/src/app/admin/page.tsx)
+           Admin 전용 로그인 폼 + 카페 선택 + 메뉴 목록 조회/추가/삭제 UI
+           (별도 백엔드 API 없이 Supabase RLS 직접 연동)
+  - [ ] Admin Role 전용 RLS 정책으로 교체 (현재 authenticated 전체 허용 상태)
+  - [ ] 리뷰 Soft Delete 엔드포인트
+  - [ ] 신고 처리
 
 [ ] Feature 2-6. 블루-그린 무중단 배포 설정
   - Docker 블루-그린 전환 스크립트
@@ -138,11 +149,13 @@ Epic 3: 프론트엔드 - 지도 및 필터 구현
   - OR 조건 메모리 내 배열 필터링 (50ms 이하, 핀 500개 기준)
   - 이벤트 로깅: filter_clicked { category }
   - frontend/src/hooks/useFilter.ts
+  ※ KAN-22 커밋 이력은 있으나 현재 H_develop 브랜치에 useFilter.ts 및 필터 UI 코드 미존재 (머지 충돌 해소 과정에서 누락된 것으로 보임 → 재구현 필요)
 
-[ ] Feature 3-3. 핀 클릭 시 상세 정보 모달
-  - 카페 이름, 주소, 메뉴 목록, 시그니처 메뉴(왕관 아이콘) 표시
-  - 바텀시트 / 카드 형태 UI
-  - frontend/src/components/CafeModal.tsx
+[진행중] Feature 3-3. 핀 클릭 시 상세 정보 모달
+  - [완료] 기본 인라인 모달 구현 (frontend/src/app/page.tsx 내 인라인 — 카페 이름/주소 표시)
+  - [ ] 별도 CafeModal 컴포넌트 분리 (frontend/src/components/CafeModal.tsx)
+  - [ ] 메뉴 목록 표시 (menus 테이블 연동)
+  - [ ] 시그니처 메뉴 왕관 아이콘 표시 (menu_scores 연동)
 
 [ ] Feature 3-4. 필터 결과 0개 UX 처리
   - "이 지역에는 아직 해당 메뉴를 잘하는 곳이 없네요. 필터를 초기화해 볼까요?"
