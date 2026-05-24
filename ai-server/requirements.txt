@@ -6,3 +6,5 @@ transformers==4.41.2
 numpy==1.26.4
 python-dotenv==1.0.1
 pydantic-settings==2.14.1
+slowapi==0.1.9
+supabase==2.5.3

@@ -1,13 +1,16 @@
 import time
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.core.config import settings
 from app.core.text_cleaner import clean_review_text
 from app.models.predict import KcbertRelevancePredictor, KoelectraSentimentPredictor
 
 
+limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
 
 kcbert_predictor = KcbertRelevancePredictor()
@@ -30,11 +33,12 @@ class AnalyzeReviewResponse(BaseModel):
 
 
 @router.post("/analyze-review", response_model=AnalyzeReviewResponse)
-def analyze_review(request: AnalyzeReviewRequest):
+@limiter.limit("10/minute")
+def analyze_review(request: Request, body: AnalyzeReviewRequest):
     start_time = time.perf_counter()
 
     cleaned_text = clean_review_text(
-        request.review_text,
+        body.review_text,
         kcbert_predictor.tokenizer,
     )
 

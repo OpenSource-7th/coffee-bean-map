@@ -96,22 +96,35 @@ Epic 2: AI 추론 서버 구축 (FastAPI)
   - [ ] Gunicorn(멀티 워커) + Uvicorn 서버 설정 (Dockerfile만 작성됨, 미검증)
   - [ ] Cold Start < 2s 목표
 
-[ ] Feature 2-3. /api/v1/analyze-review 엔드포인트 구현
+[완료] Feature 2-3. /api/v1/analyze-review 엔드포인트 구현
   - Request: { user_id, cafe_id, menu_id, review_text }
-  - 입력 정제: regex 특수문자 무해화, control token 제거, XSS escape, 500 토큰 제한
+  - 입력 정제: regex 특수문자 무해화, control token 제거, XSS escape, 300 토큰 제한
+           (ai-server/app/core/text_cleaner.py)
   - 3자 미만 입력: 400 Bad Request (클라이언트에서도 사전 차단)
-  - ONNX 추론: sentiment(positive/neutral/negative) + confidence + menu_relevance
-  - menu_relevance 낮음 → Neutral 처리
+  - ONNX 이중 모델 추론:
+      KcBERT (kcbert_onnx) → menu_relevance 점수 및 관련성 이진 분류
+      KoELECTRA (koelectra_onnx) → sentiment(positive/negative) + confidence
+      menu_relevance < 0.5 또는 confidence < 0.6 → neutral 강제 처리
   - Response: { status, sentiment, confidence, menu_relevance, latency_ms }
-  - P99 200ms 이하, Max TPS 500 목표
-  - ai-server/app/api/, ai-server/app/models/, ai-server/app/core/ 디렉토리 존재하나 전부 비어있음
+  - ai-server/app/api/v1/analyze_review.py
+  - ai-server/app/core/text_cleaner.py, ai-server/app/core/config.py
   ※ frontend/src/hooks/useSubmitReview.ts 에서 이 엔드포인트 호출 코드는 이미 구현 완료
 
-[ ] Feature 2-4. 보안 및 Abuse 대응
-  - Rate Limiting (동일 카페 반복 리뷰 제한)
-  - Spam Detection
-  - 리뷰 Soft Delete 엔드포인트
-  - 신고 처리 API
+[진행중] Feature 2-4. 보안 및 Abuse 대응
+  - [완료] Rate Limiting: slowapi, 동일 IP 기준 /analyze-review 분당 10회 제한
+           ai-server/main.py (Limiter 등록), ai-server/app/api/v1/analyze_review.py
+  - [완료] Spam Detection: URL/전화번호/반복문자/자음모음 패턴 감지 → 422 반환
+           ai-server/app/core/text_cleaner.py (_check_spam 함수)
+  - [완료] 리뷰 Soft Delete 엔드포인트 (PATCH /api/v1/reviews/{review_id}/delete)
+           ai-server/app/api/v1/reviews.py
+           supabase/migrations/20260524000001_feature_2_4_soft_delete.sql
+           (is_deleted, deleted_at 컬럼 추가 + RLS 갱신)
+  - [완료] 신고 처리 API (POST /api/v1/reports)
+           ai-server/app/api/v1/reports.py
+           supabase/migrations/20260524000002_feature_2_4_reports.sql
+           (reports 테이블 신규 생성 + RLS 설정)
+  - [ ] Admin Role 전용 RLS 정책으로 교체 (현재 service role key 직접 사용)
+  - [ ] 신고 Admin 처리 UI (신고 목록 조회 + 승인/기각 처리)
 
 [진행중] Feature 2-5. 관리자 API
   - [완료] menus INSERT/DELETE RLS 정책 추가 (authenticated 사용자 대상, 개발 단계용)
