@@ -7,13 +7,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # ── deps: 의존성 설치 ─────────────────────────────────────────────
 FROM base AS deps
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --upgrade pip setuptools wheel \
+    && pip install --index-url https://download.pytorch.org/whl/cpu torch \
+    && pip install -r requirements.txt
 
 # ── dev: 개발 서버 (auto-reload) ──────────────────────────────────
 FROM deps AS dev
 COPY . .
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
 # ── runner: 프로덕션 (Gunicorn + Uvicorn workers) ─────────────────
 FROM deps AS runner
