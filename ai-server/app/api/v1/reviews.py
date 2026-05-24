@@ -7,6 +7,7 @@ from slowapi.util import get_remote_address
 from supabase import create_client
 
 from app.core.config import settings
+from app.core.metrics import DB_QUERY_LATENCY
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
@@ -21,13 +22,14 @@ class SoftDeleteRequest(BaseModel):
 @router.patch("/reviews/{review_id}/delete")
 @limiter.limit("30/minute")
 def soft_delete_review(review_id: str, body: SoftDeleteRequest, request: Request):
-    result = (
-        _supabase.table("reviews")
-        .select("id, user_id, is_deleted")
-        .eq("id", review_id)
-        .single()
-        .execute()
-    )
+    with DB_QUERY_LATENCY.labels(operation="select_review").time():
+        result = (
+            _supabase.table("reviews")
+            .select("id, user_id, is_deleted")
+            .eq("id", review_id)
+            .single()
+            .execute()
+        )
 
     if not result.data:
         raise HTTPException(status_code=404, detail="리뷰를 찾을 수 없습니다.")
@@ -39,11 +41,12 @@ def soft_delete_review(review_id: str, body: SoftDeleteRequest, request: Request
     if review["user_id"] != body.user_id:
         raise HTTPException(status_code=403, detail="본인의 리뷰만 삭제할 수 있습니다.")
 
-    _supabase.table("reviews").update(
-        {
-            "is_deleted": True,
-            "deleted_at": datetime.now(timezone.utc).isoformat(),
-        }
-    ).eq("id", review_id).execute()
+    with DB_QUERY_LATENCY.labels(operation="soft_delete_review").time():
+        _supabase.table("reviews").update(
+            {
+                "is_deleted": True,
+                "deleted_at": datetime.now(timezone.utc).isoformat(),
+            }
+        ).eq("id", review_id).execute()
 
     return {"status": "ok", "review_id": review_id}

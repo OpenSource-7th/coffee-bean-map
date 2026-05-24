@@ -20,6 +20,9 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 # ── runner: 프로덕션 (Gunicorn + Uvicorn workers) ─────────────────
 FROM deps AS runner
 COPY . .
+# 멀티프로세스 Prometheus 메트릭 집계용 공유 디렉토리
+RUN mkdir -p /tmp/prometheus_multiproc
+ENV PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus_multiproc
 EXPOSE 8000
 # AVX2 최적화 ONNX Runtime 사용, worker 수는 CPU 코어 × 2 + 1 권장
 CMD ["gunicorn", "main:app", \

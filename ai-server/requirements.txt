@@ -8,3 +8,5 @@ python-dotenv==1.0.1
 pydantic-settings==2.14.1
 slowapi==0.1.9
 supabase==2.5.3
+prometheus-fastapi-instrumentator==6.1.0
+prometheus-client==0.20.0
