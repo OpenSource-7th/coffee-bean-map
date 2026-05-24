@@ -3,6 +3,7 @@
 import { useState } from "react";
 import KakaoMap from "@/components/KakaoMap";
 import AuthModal from "@/components/AuthModal";
+import ReviewForm from "@/components/ReviewForm";
 import { useCafes } from "@/hooks/useCafes";
 import { useAuth } from "@/hooks/useAuth";
 import { Cafe } from "@/lib/types";
@@ -12,6 +13,7 @@ export default function Home() {
   const [center, setCenter] = useState({ lat: 37.3219, lng: 127.1269 });
   const [selectedCafe, setSelectedCafe] = useState<Cafe | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isReviewFormOpen, setIsReviewFormOpen] = useState(false);
 
   const { cafes, isLoading: cafesLoading } = useCafes({ center, radiusMeters: 1000 });
   const { session, isLoading: authLoading, signOut } = useAuth();
@@ -21,7 +23,7 @@ export default function Home() {
       setIsAuthModalOpen(true);
       return;
     }
-    // Feature 4-2 연동 지점
+    setIsReviewFormOpen(true);
   }
 
   return (
@@ -132,6 +134,18 @@ export default function Home() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 리뷰 폼 */}
+      {isReviewFormOpen && selectedCafe && session && (
+        <ReviewForm
+          cafe={selectedCafe}
+          userId={session.user.id}
+          onClose={() => {
+            setIsReviewFormOpen(false);
+            setSelectedCafe(null);
+          }}
+        />
       )}
 
       {/* 인증 모달 */}

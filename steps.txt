@@ -191,7 +191,7 @@ Epic 4: 프론트엔드 - 리뷰 및 AI 연동
   - frontend/src/components/ClientProviders.tsx (AuthContext Provider 래퍼)
   - frontend/src/app/globals.css (디자인 토큰 @theme)
 
-[ ] Feature 4-2. 메뉴 선택형 리뷰 입력 폼 UI
+[완료] Feature 4-2. 메뉴 선택형 리뷰 입력 폼 UI
   - Step 1: 방문 카페 선택
   - Step 2: 실제 주문한 메뉴 선택 (menus 테이블에서 카페별 메뉴 목록 로드)
   - Step 3: 텍스트 리뷰 작성

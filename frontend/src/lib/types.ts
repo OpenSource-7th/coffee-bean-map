@@ -29,3 +29,10 @@ export interface Profile {
   created_at: string
   updated_at: string
 }
+
+export interface Menu {
+  id: string
+  cafe_id: string
+  menu_name: string
+  created_at: string
+}
