@@ -14,5 +14,11 @@ class Settings(BaseSettings):
     ONNX_INTRA_OP_NUM_THREADS: int = 1
     ONNX_INTER_OP_NUM_THREADS: int = 1
 
+    SUPABASE_URL: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
+
+    class Config:
+        env_file = ".env"
+
 
 settings = Settings()

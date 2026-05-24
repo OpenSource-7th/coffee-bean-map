@@ -1,18 +1,15 @@
-import os
-
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from supabase import create_client
 
+from app.core.config import settings
+
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
 
-_supabase = create_client(
-    os.environ["SUPABASE_URL"],
-    os.environ["SUPABASE_SERVICE_ROLE_KEY"],
-)
+_supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
 
 VALID_REASONS = {"spam", "offensive", "irrelevant", "other"}
 
