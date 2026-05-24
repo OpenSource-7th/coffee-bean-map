@@ -12,6 +12,7 @@ interface Cafe {
 interface Menu {
   id: string;
   menu_name: string;
+  is_verified: boolean;
 }
 
 interface Report {
@@ -102,6 +103,7 @@ export default function AdminPage() {
   const [menuStatus, setMenuStatus] = useState<string | null>(null);
   const [menuLoading, setMenuLoading] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmApproveId, setConfirmApproveId] = useState<string | null>(null);
 
   // 신고 관리 상태
   const [reports, setReports] = useState<Report[]>([]);
@@ -129,7 +131,7 @@ export default function AdminPage() {
     if (!selectedCafeId) { setMenus([]); return; }
     supabase
       .from("menus")
-      .select("id, menu_name")
+      .select("id, menu_name, is_verified")
       .eq("cafe_id", selectedCafeId)
       .order("menu_name")
       .then(({ data }) => setMenus(data ?? []));
@@ -155,13 +157,13 @@ export default function AdminPage() {
     if (!selectedCafeId || !name) return;
     setMenuLoading(true);
     setMenuStatus(null);
-    const { error } = await supabase.from("menus").insert({ cafe_id: selectedCafeId, menu_name: name });
+    const { error } = await supabase.from("menus").insert({ cafe_id: selectedCafeId, menu_name: name, is_verified: true });
     if (error) {
       setMenuStatus(`오류: ${error.message}`);
     } else {
       setNewMenuName("");
       setMenuStatus(`"${name}" 추가 완료`);
-      const { data } = await supabase.from("menus").select("id, menu_name").eq("cafe_id", selectedCafeId).order("menu_name");
+      const { data } = await supabase.from("menus").select("id, menu_name, is_verified").eq("cafe_id", selectedCafeId).order("menu_name");
       setMenus(data ?? []);
     }
     setMenuLoading(false);
@@ -177,6 +179,19 @@ export default function AdminPage() {
     } else {
       setMenuStatus(`"${menuName}" 삭제 완료`);
       setMenus((prev) => prev.filter((m) => m.id !== menuId));
+    }
+  }
+
+  async function handleMenuApprove(menuId: string, menuName: string) {
+    if (confirmApproveId !== menuId) { setConfirmApproveId(menuId); return; }
+    setConfirmApproveId(null);
+    setMenuStatus(null);
+    const { error } = await supabase.from("menus").update({ is_verified: true }).eq("id", menuId);
+    if (error) {
+      setMenuStatus(`승인 오류: ${error.message}`);
+    } else {
+      setMenuStatus(`"${menuName}" 승인 완료`);
+      setMenus((prev) => prev.map((m) => m.id === menuId ? { ...m, is_verified: true } : m));
     }
   }
 
@@ -302,30 +317,69 @@ export default function AdminPage() {
                           borderRadius: 8,
                         }}
                       >
-                        <span style={{ fontSize: 14 }}>{m.menu_name}</span>
-                        {confirmDeleteId === m.id ? (
-                          <span style={{ display: "flex", gap: 8 }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 14 }}>{m.menu_name}</span>
+                          <span style={{
+                            fontSize: 11,
+                            fontWeight: "bold",
+                            color: m.is_verified ? "#27ae60" : "#e67e22",
+                            background: m.is_verified ? "#eafaf1" : "#fef9e7",
+                            borderRadius: 4,
+                            padding: "1px 6px",
+                          }}>
+                            {m.is_verified ? "✓ 승인됨" : "대기"}
+                          </span>
+                        </span>
+                        <span style={{ display: "flex", gap: 8 }}>
+                          {!m.is_verified && (
+                            confirmApproveId === m.id ? (
+                              <>
+                                <button
+                                  onClick={() => handleMenuApprove(m.id, m.menu_name)}
+                                  style={{ background: "#27ae60", color: "#fff", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}
+                                >
+                                  확인
+                                </button>
+                                <button
+                                  onClick={() => setConfirmApproveId(null)}
+                                  style={{ background: "none", border: "1px solid #ccc", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}
+                                >
+                                  취소
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => handleMenuApprove(m.id, m.menu_name)}
+                                style={{ background: "none", border: "1px solid #27ae60", color: "#27ae60", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}
+                              >
+                                승인
+                              </button>
+                            )
+                          )}
+                          {confirmDeleteId === m.id ? (
+                            <>
+                              <button
+                                onClick={() => handleMenuDelete(m.id, m.menu_name)}
+                                style={{ background: "#c0392b", color: "#fff", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}
+                              >
+                                확인
+                              </button>
+                              <button
+                                onClick={() => setConfirmDeleteId(null)}
+                                style={{ background: "none", border: "1px solid #ccc", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}
+                              >
+                                취소
+                              </button>
+                            </>
+                          ) : (
                             <button
                               onClick={() => handleMenuDelete(m.id, m.menu_name)}
-                              style={{ background: "#c0392b", color: "#fff", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}
+                              style={{ background: "none", border: "none", color: "#c0392b", cursor: "pointer", fontSize: 13 }}
                             >
-                              확인
+                              삭제
                             </button>
-                            <button
-                              onClick={() => setConfirmDeleteId(null)}
-                              style={{ background: "none", border: "1px solid #ccc", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}
-                            >
-                              취소
-                            </button>
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => handleMenuDelete(m.id, m.menu_name)}
-                            style={{ background: "none", border: "none", color: "#c0392b", cursor: "pointer", fontSize: 13 }}
-                          >
-                            삭제
-                          </button>
-                        )}
+                          )}
+                        </span>
                       </li>
                     ))}
                   </ul>

@@ -132,17 +132,22 @@ Epic 2: AI 추론 서버 구축 (FastAPI)
            승인 시 reviews soft delete + reports 상태 'approved' 동시 처리
            window.confirm() → 인라인 확인 버튼으로 교체 (SSR 안전)
 
-[진행중] Feature 2-5. 관리자 API
+[완료] Feature 2-5. 관리자 API
   - [완료] menus INSERT/DELETE RLS 정책 추가 (authenticated 사용자 대상, 개발 단계용)
            supabase/migrations/20260518000003_menus_admin_insert.sql
            supabase/migrations/20260518000004_menus_admin_delete.sql
   - [완료] 관리자 프론트엔드 페이지 구현 (frontend/src/app/admin/page.tsx)
            Admin 전용 로그인 폼 + 카페 선택 + 메뉴 목록 조회/추가/삭제 UI
            (별도 백엔드 API 없이 Supabase RLS 직접 연동)
-  - [미완] 삭제 시 window.confirm() 사용 중 → 서버 사이드 렌더링 환경 주의 필요
+  - [완료] 삭제 시 window.confirm() → confirmDeleteId 상태 기반 인라인 확인 버튼으로 교체 (SSR 안전)
   - [완료] Admin Role 전용 RLS 정책으로 교체 → Feature 2-4에서 완료
   - [완료] 리뷰 Soft Delete 엔드포인트 → Feature 2-4에서 완료
   - [완료] 신고 처리 → Feature 2-4에서 완료
+  - [완료] menus.is_verified 컬럼 추가 + RLS UPDATE 정책 (admin 전용)
+           supabase/migrations/20260524000005_feature_2_5_menus_is_verified.sql
+           기존 메뉴 전부 is_verified=true 으로 일괄 업데이트
+           관리자 추가 메뉴는 is_verified=true 즉시 설정
+           미승인 메뉴(is_verified=false) 승인 UI 추가 (인라인 확인 버튼 패턴)
 
 [ ] Feature 2-6. 블루-그린 무중단 배포 설정
   - Docker 블루-그린 전환 스크립트
