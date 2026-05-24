@@ -25,3 +25,8 @@ app.add_middleware(
 app.include_router(analyze_review_router, prefix="/api/v1", tags=["Review Analysis"])
 app.include_router(reviews_router, prefix="/api/v1", tags=["Reviews"])
 app.include_router(reports_router, prefix="/api/v1", tags=["Reports"])
+
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
