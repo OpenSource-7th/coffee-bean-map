@@ -49,6 +49,7 @@ export function useSubmitReview(): UseSubmitReviewResult {
       }
 
       const aiData: AIAnalyzeResponse = await aiResponse.json()
+      console.log('ai_result', { sentiment: aiData.sentiment })
 
       if (aiData.status === 'error') {
         setStatus('rejected')

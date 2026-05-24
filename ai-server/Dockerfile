@@ -22,7 +22,7 @@ FROM deps AS runner
 COPY . .
 EXPOSE 8000
 # AVX2 최적화 ONNX Runtime 사용, worker 수는 CPU 코어 × 2 + 1 권장
-CMD ["gunicorn", "app.main:app", \
+CMD ["gunicorn", "main:app", \
      "--worker-class", "uvicorn.workers.UvicornWorker", \
      "--workers", "3", \
      "--bind", "0.0.0.0:8000", \

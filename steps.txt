@@ -199,7 +199,7 @@ Epic 4: 프론트엔드 - 리뷰 및 AI 연동
   - 이벤트 로깅: review_submitted { length_of_text }
   - frontend/src/components/ReviewForm.tsx
 
-[ ] Feature 4-3. AI 리뷰 분석 파이프라인 연동
+[완료] Feature 4-3. AI 리뷰 분석 파이프라인 연동
   - AI 서버 POST /api/v1/analyze-review 호출 (user_id, cafe_id, menu_id, review_text)
   - 응답 sentiment + confidence + menu_relevance 수신
   - Supabase reviews INSERT (sentiment 포함)

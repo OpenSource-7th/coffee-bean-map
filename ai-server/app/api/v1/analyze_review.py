@@ -15,9 +15,9 @@ koelectra_predictor = KoelectraSentimentPredictor()
 
 
 class AnalyzeReviewRequest(BaseModel):
-    user_id: int
-    cafe_id: int
-    menu_id: int
+    user_id: str
+    cafe_id: str
+    menu_id: str
     review_text: str = Field(..., min_length=1)
 
 
