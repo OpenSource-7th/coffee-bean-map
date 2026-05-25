@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    project: coffee-bean-map
+
+scrape_configs:
+  - job_name: ai-server-blue
+    static_configs:
+      - targets: ["ai-server-blue:8000"]
+        labels:
+          slot: blue
+          service: ai-server
+    metrics_path: /metrics
+    scrape_timeout: 5s
+
+  - job_name: ai-server-green
+    static_configs:
+      - targets: ["ai-server-green:8000"]
+        labels:
+          slot: green
+          service: ai-server
+    metrics_path: /metrics
+    scrape_timeout: 5s
