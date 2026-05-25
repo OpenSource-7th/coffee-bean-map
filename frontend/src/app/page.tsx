@@ -101,7 +101,7 @@ export default function Home() {
         </div>
       </main>
 
-      {/* 카페 상세 모달 */}
+      {/* 카페 상세 모달 (KAN-23) */}
       {selectedCafe && (
         <div
           className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
