@@ -1,0 +1,148 @@
+services:
+
+  nginx:
+    image: nginx:1.25-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/upstream.conf:/etc/nginx/conf.d/upstream.conf:rw
+    depends_on:
+      - frontend
+      - ai-server-blue
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "128M"
+    restart: unless-stopped
+    networks:
+      - app-net
+
+  frontend:
+    build:
+      context: ./frontend
+      target: runner
+    expose:
+      - "3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_KAKAO_MAP_KEY=${KAKAO_MAP_KEY}
+      - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - NEXT_PUBLIC_AI_SERVER_URL=/api
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "512M"
+    restart: unless-stopped
+    networks:
+      - app-net
+
+  ai-server-blue:
+    build:
+      context: ./ai-server
+      target: runner
+    container_name: ai-server-blue
+    expose:
+      - "8000"
+    ports:
+      - "8001:8000"
+    env_file:
+      - .env
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - MODEL_PATH=/app/models
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: "2G"
+    restart: unless-stopped
+    networks:
+      - app-net
+
+  ai-server-green:
+    build:
+      context: ./ai-server
+      target: runner
+    container_name: ai-server-green
+    expose:
+      - "8000"
+    ports:
+      - "8002:8000"
+    env_file:
+      - .env
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - MODEL_PATH=/app/models
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: "2G"
+    profiles:
+      - green
+    networks:
+      - app-net
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: coffee-bean-map-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "512M"
+    restart: unless-stopped
+    networks:
+      - app-net
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: coffee-bean-map-grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-coffee-bean-map-2026}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_DOMAIN=localhost
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/dashboards/ai-server.json
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "256M"
+    restart: unless-stopped
+    networks:
+      - app-net
+
+networks:
+  app-net:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:
