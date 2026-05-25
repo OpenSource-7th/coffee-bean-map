@@ -4,7 +4,6 @@ export interface Cafe {
   address: string | null
   lat: number
   lng: number
-  menu_tags: string[]
   created_at: string
 }
 
@@ -13,14 +12,15 @@ export interface MapCenter {
   lng: number
 }
 
-export type AIAnalyzeStatus = 'valid' | 'invalid'
+export type AIAnalyzeSentiment = 'positive' | 'neutral' | 'negative'
+export type AIAnalyzeStatus = 'success' | 'error'
 
 export interface AIAnalyzeResponse {
   status: AIAnalyzeStatus
-  confidence_score?: number
-  latency_ms?: number
-  reason?: string
-  message?: string
+  sentiment: AIAnalyzeSentiment
+  confidence: number
+  menu_relevance: number
+  latency_ms: number
 }
 
 export interface Profile {
@@ -28,4 +28,11 @@ export interface Profile {
   email: string
   created_at: string
   updated_at: string
+}
+
+export interface Menu {
+  id: string
+  cafe_id: string
+  menu_name: string
+  created_at: string
 }
