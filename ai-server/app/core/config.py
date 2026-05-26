@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    KCBERT_ONNX_MODEL_DIR: str = "app/models/kcbert_onnx/onnx_kcbert_fft"
+    KCBERT_ONNX_MODEL_DIR: str = "app/models/kcbert_onnx/onnx_kcbert_lora"
     KOELECTRA_ONNX_MODEL_DIR: str = "app/models/koelectra_onnx/onnx_koelectra"
 
     MAX_TOKEN_LENGTH: int = 300
@@ -13,12 +13,6 @@ class Settings(BaseSettings):
 
     ONNX_INTRA_OP_NUM_THREADS: int = 1
     ONNX_INTER_OP_NUM_THREADS: int = 1
-
-    SUPABASE_URL: str = ""
-    SUPABASE_SERVICE_ROLE_KEY: str = ""
-
-    class Config:
-        env_file = ".env"
 
 
 settings = Settings()
