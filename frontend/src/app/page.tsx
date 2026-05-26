@@ -4,17 +4,18 @@ import { useState } from "react";
 import KakaoMap from "@/components/KakaoMap";
 import AuthModal from "@/components/AuthModal";
 import ReviewForm from "@/components/ReviewForm";
+import CafeDetailModal from "@/components/CafeDetailModal";
+import MyReviewsPanel from "@/components/MyReviewsPanel";
 import { useCafes } from "@/hooks/useCafes";
 import { useAuth } from "@/hooks/useAuth";
 import { Cafe } from "@/lib/types";
-import CafeDetailModal from "@/components/CafeDetailModal";
-
 
 export default function Home() {
   const [center, setCenter] = useState({ lat: 37.3219, lng: 127.1269 });
   const [selectedCafe, setSelectedCafe] = useState<Cafe | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isReviewFormOpen, setIsReviewFormOpen] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<"list" | "myreviews">("list");
 
   const { cafes, isLoading: cafesLoading } = useCafes({ center, radiusMeters: 1000 });
   const { session, isLoading: authLoading, signOut } = useAuth();
@@ -73,22 +74,50 @@ export default function Home() {
         {/* 사이드바 */}
         <aside className="w-72 overflow-y-auto border-r border-stone-200 bg-[#fbf9f9] no-scrollbar">
           <div className="px-5 pt-5 pb-3">
-            <h2 className="font-serif text-[18px] font-bold text-[#3e2723]">내 주변 카페</h2>
-          </div>
-          <div className="flex flex-col gap-2 px-4 pb-6">
-            {cafesLoading && (
-              <p className="text-[14px] text-stone-400 px-1 py-4">불러오는 중...</p>
-            )}
-            {cafes.map((cafe) => (
-              <div
-                key={cafe.id}
-                onClick={() => setSelectedCafe(cafe)}
-                className="bg-white p-4 rounded-xl border border-stone-200/60 hover:border-stone-300 transition-colors cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSidebarTab("list")}
+                className={`flex-1 py-2 rounded-lg text-[13px] font-semibold transition-colors ${
+                  sidebarTab === "list"
+                    ? "bg-[#271310] text-white"
+                    : "bg-stone-100 text-stone-600"
+                }`}
               >
-                <p className="font-bold text-[15px] text-stone-800">{cafe.name}</p>
-                <p className="text-[12px] text-stone-500 mt-0.5">{cafe.address}</p>
-              </div>
-            ))}
+                주변 카페
+              </button>
+              <button
+                onClick={() => setSidebarTab("myreviews")}
+                className={`flex-1 py-2 rounded-lg text-[13px] font-semibold transition-colors ${
+                  sidebarTab === "myreviews"
+                    ? "bg-[#271310] text-white"
+                    : "bg-stone-100 text-stone-600"
+                }`}
+              >
+                내 리뷰
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 px-4 pb-6">
+            {sidebarTab === "list" ? (
+              <>
+                {cafesLoading && (
+                  <p className="text-[14px] text-stone-400 px-1 py-4">불러오는 중...</p>
+                )}
+                {cafes.map((cafe) => (
+                  <div
+                    key={cafe.id}
+                    onClick={() => setSelectedCafe(cafe)}
+                    className="bg-white p-4 rounded-xl border border-stone-200/60 hover:border-stone-300 transition-colors cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+                  >
+                    <p className="font-bold text-[15px] text-stone-800">{cafe.name}</p>
+                    <p className="text-[12px] text-stone-500 mt-0.5">{cafe.address}</p>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <MyReviewsPanel userId={session?.user.id ?? null} />
+            )}
           </div>
         </aside>
 
@@ -102,15 +131,15 @@ export default function Home() {
         </div>
       </main>
 
-      {/* 카페 상세 모달 (KAN-36) */}
-{selectedCafe && (
-  <CafeDetailModal
-    cafe={selectedCafe}
-    session={session}
-    onClose={() => setSelectedCafe(null)}
-    onOpenReview={handleOpenReview}
-  />
-)}
+      {/* 카페 상세 모달 */}
+      {selectedCafe && (
+        <CafeDetailModal
+          cafe={selectedCafe}
+          session={session}
+          onClose={() => setSelectedCafe(null)}
+          onOpenReview={handleOpenReview}
+        />
+      )}
 
       {/* 리뷰 폼 */}
       {isReviewFormOpen && selectedCafe && session && (
