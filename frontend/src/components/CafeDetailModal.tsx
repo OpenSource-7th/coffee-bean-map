@@ -2,6 +2,7 @@
 
 import { Cafe } from "@/lib/types";
 import { useMenus } from "@/hooks/useMenus";
+import { useBookmarks } from "@/hooks/useBookmarks";
 
 interface Props {
   cafe: Cafe;
@@ -12,6 +13,7 @@ interface Props {
 
 export default function CafeDetailModal({ cafe, session, onClose, onOpenReview }: Props) {
   const { menus, isLoading: menusLoading } = useMenus(cafe.id);
+  const { isBookmarked, toggleBookmark } = useBookmarks();
 
   return (
     <div
@@ -23,23 +25,36 @@ export default function CafeDetailModal({ cafe, session, onClose, onOpenReview }
         style={{ boxShadow: "0px 8px 40px rgba(62,39,35,0.18)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 헤더 */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
           <h3 className="font-serif text-[17px] font-bold text-stone-900">{cafe.name}</h3>
-          <button
-            onClick={onClose}
-            className="text-stone-400 hover:text-stone-600 transition-colors"
-          >
-            <span className="material-symbols-outlined text-[20px]">close</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => toggleBookmark(cafe)}
+              className="text-stone-400 hover:text-[#ac3509] transition-colors"
+            >
+              <span
+                className="material-symbols-outlined text-[22px]"
+                style={{
+                  fontVariationSettings: isBookmarked(cafe.id) ? "'FILL' 1" : "'FILL' 0",
+                  color: isBookmarked(cafe.id) ? "#ac3509" : undefined,
+                }}
+              >
+                bookmark
+              </span>
+            </button>
+            <button
+              onClick={onClose}
+              className="text-stone-400 hover:text-stone-600 transition-colors"
+            >
+              <span className="material-symbols-outlined text-[20px]">close</span>
+            </button>
+          </div>
         </div>
 
-        {/* 주소 */}
         <div className="px-5 pt-4">
           <p className="text-[13px] text-stone-500">{cafe.address}</p>
         </div>
 
-        {/* 시그니처 메뉴 (KAN-36) */}
         <div className="px-5 pt-4 pb-2">
           <p className="text-[13px] font-semibold text-stone-700 mb-2">☕ 메뉴</p>
           {menusLoading && (
@@ -62,7 +77,6 @@ export default function CafeDetailModal({ cafe, session, onClose, onOpenReview }
           )}
         </div>
 
-        {/* 리뷰 작성 버튼 */}
         <div className="px-5 py-5">
           <button
             onClick={onOpenReview}
