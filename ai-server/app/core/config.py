@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     MAX_TOKEN_LENGTH: int = 300
     MIN_REVIEW_LENGTH: int = 3
 
-    MENU_RELEVANCE_THRESHOLD: float = 0.85
+    MENU_RELEVANCE_THRESHOLD: float = 0.75
     SENTIMENT_CONFIDENCE_THRESHOLD: float = 0.6
 
     ONNX_INTRA_OP_NUM_THREADS: int = 1
