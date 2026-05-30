@@ -144,7 +144,7 @@ export default function AdminPage() {
       .select("id, reason, description, status, created_at, review_id, reviews(id, review_text)")
       .eq("status", "pending")
       .order("created_at", { ascending: true });
-    if (!error) setReports((data ?? []) as Report[]);
+    if (!error) setReports((data ?? []) as unknown as Report[]);
     setReportLoading(false);
   }
 

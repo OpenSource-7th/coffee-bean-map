@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import KakaoMap from "@/components/KakaoMap";
 import AuthModal from "@/components/AuthModal";
 import ReviewForm from "@/components/ReviewForm";
@@ -8,6 +8,9 @@ import CafeDetailModal from "@/components/CafeDetailModal";
 import MyReviewsPanel from "@/components/MyReviewsPanel";
 import { useCafes } from "@/hooks/useCafes";
 import { useAuth } from "@/hooks/useAuth";
+import { useFilter } from "@/hooks/useFilter";
+import { useCafeMenus } from "@/hooks/useCafeMenus";
+import { useSubmitReview } from "@/hooks/useSubmitReview";
 import { Cafe } from "@/lib/types";
 
 export default function Home() {
@@ -19,6 +22,25 @@ export default function Home() {
 
   const { cafes, isLoading: cafesLoading } = useCafes({ center, radiusMeters: 1000 });
   const { session, isLoading: authLoading, signOut } = useAuth();
+  const { selectedFilters, toggleFilter, clearFilters } = useFilter();
+  const { pendingReviews, retryPending, dismissPending } = useSubmitReview();
+
+  const cafeIds = useMemo(() => cafes.map(c => c.id), [cafes]);
+  const { cafeMenuMap } = useCafeMenus(cafeIds);
+
+  const availableMenuFilters = useMemo(() => {
+    const all = new Set<string>();
+    cafeMenuMap.forEach(menus => menus.forEach(m => all.add(m)));
+    return Array.from(all).sort();
+  }, [cafeMenuMap]);
+
+  const filteredCafes = useMemo(() => {
+    if (selectedFilters.length === 0) return cafes;
+    return cafes.filter(cafe => {
+      const menus = cafeMenuMap.get(cafe.id) ?? [];
+      return selectedFilters.some(filter => menus.some(m => m === filter));
+    });
+  }, [cafes, selectedFilters, cafeMenuMap]);
 
   function handleOpenReview() {
     if (!session) {
@@ -69,11 +91,65 @@ export default function Home() {
         </div>
       </header>
 
+      {/* 오프라인 대기 리뷰 배너 */}
+      {pendingReviews.length > 0 && (
+        <div className="bg-amber-50 border-b border-amber-200 px-5 py-2.5 flex items-center justify-between shrink-0 z-20">
+          <p className="text-[12px] text-amber-800">
+            <span className="font-semibold">임시 저장된 리뷰 {pendingReviews.length}건</span>이 있습니다.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => pendingReviews.forEach(r => retryPending(r.id))}
+              className="text-[12px] font-semibold text-amber-700 hover:text-amber-900 underline"
+            >
+              전체 재시도
+            </button>
+            <button
+              onClick={() => pendingReviews.forEach(r => dismissPending(r.id))}
+              className="text-[12px] text-amber-500 hover:text-amber-700"
+            >
+              전체 삭제
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 메인 콘텐츠 */}
       <main className="flex flex-1 overflow-hidden">
         {/* 사이드바 */}
-        <aside className="w-72 overflow-y-auto border-r border-stone-200 bg-[#fbf9f9] no-scrollbar">
-          <div className="px-5 pt-5 pb-3">
+        <aside className="w-72 flex flex-col border-r border-stone-200 bg-[#fbf9f9] overflow-hidden">
+          {/* 필터 칩 */}
+          <div className="px-4 pt-4 pb-2 shrink-0">
+            <div className="flex gap-1.5 flex-wrap">
+              {availableMenuFilters.map(filter => {
+                const active = selectedFilters.includes(filter);
+                return (
+                  <button
+                    key={filter}
+                    onClick={() => toggleFilter(filter)}
+                    className={`px-3 py-1 rounded-full text-[12px] font-semibold border transition-colors ${
+                      active
+                        ? "bg-[#ac3509] text-white border-[#ac3509]"
+                        : "bg-white text-stone-600 border-stone-300 hover:border-stone-400"
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                );
+              })}
+              {selectedFilters.length > 0 && (
+                <button
+                  onClick={clearFilters}
+                  className="px-3 py-1 rounded-full text-[12px] font-semibold border border-stone-200 text-stone-400 hover:text-stone-600 transition-colors"
+                >
+                  초기화
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 탭 */}
+          <div className="px-5 pt-2 pb-3 shrink-0">
             <div className="flex gap-2">
               <button
                 onClick={() => setSidebarTab("list")}
@@ -98,13 +174,36 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-2 px-4 pb-6">
+          {/* 카페 목록 / 내 리뷰 */}
+          <div className="flex flex-col gap-2 px-4 pb-6 overflow-y-auto no-scrollbar flex-1">
             {sidebarTab === "list" ? (
               <>
                 {cafesLoading && (
                   <p className="text-[14px] text-stone-400 px-1 py-4">불러오는 중...</p>
                 )}
-                {cafes.map((cafe) => (
+                {!cafesLoading && filteredCafes.length === 0 && (
+                  <div className="px-1 py-8 text-center">
+                    <span
+                      className="material-symbols-outlined text-[36px] text-stone-300 block mb-2"
+                      style={{ fontVariationSettings: "'FILL' 1" }}
+                    >
+                      search_off
+                    </span>
+                    <p className="text-[13px] text-stone-500 leading-relaxed">
+                      이 지역에는 아직 해당 메뉴를 잘하는 곳이 없네요.
+                      <br />필터를 초기화해 볼까요?
+                    </p>
+                    {selectedFilters.length > 0 && (
+                      <button
+                        onClick={clearFilters}
+                        className="mt-3 px-4 py-1.5 rounded-lg border border-stone-300 text-[12px] text-stone-600 hover:bg-stone-100 transition-colors"
+                      >
+                        필터 초기화
+                      </button>
+                    )}
+                  </div>
+                )}
+                {filteredCafes.map((cafe) => (
                   <div
                     key={cafe.id}
                     onClick={() => setSelectedCafe(cafe)}
@@ -124,7 +223,7 @@ export default function Home() {
         {/* 지도 */}
         <div className="flex-1 relative">
           <KakaoMap
-            cafes={cafes}
+            cafes={filteredCafes}
             onPinClick={setSelectedCafe}
             onCenterChanged={(lat, lng) => setCenter({ lat, lng })}
           />
@@ -132,7 +231,7 @@ export default function Home() {
       </main>
 
       {/* 카페 상세 모달 */}
-      {selectedCafe && (
+      {selectedCafe && !isReviewFormOpen && (
         <CafeDetailModal
           cafe={selectedCafe}
           session={session}

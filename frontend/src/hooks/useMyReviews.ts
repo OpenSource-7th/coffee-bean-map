@@ -5,8 +5,8 @@ export interface MyReview {
   id: string
   cafe_id: string
   cafe_name: string
-  content: string
-  is_valid: boolean
+  review_text: string
+  sentiment: string | null
   created_at: string
 }
 
@@ -24,14 +24,19 @@ export function useMyReviews(userId: string | null) {
 
     supabase
       .from('reviews')
-      .select('id, cafe_id, cafes(name), content, is_valid, created_at')
+      .select('id, cafe_id, cafes(name), review_text, sentiment, created_at')
       .eq('user_id', userId)
+      .eq('is_deleted', false)
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         setReviews(
           (data ?? []).map((r: any) => ({
-            ...r,
+            id: r.id,
+            cafe_id: r.cafe_id,
             cafe_name: r.cafes?.name ?? '알 수 없는 카페',
+            review_text: r.review_text ?? '',
+            sentiment: r.sentiment ?? null,
+            created_at: r.created_at,
           }))
         )
         setIsLoading(false)

@@ -33,8 +33,9 @@ export function useMenus(cafeId: string | null): UseMenusResult {
 
     supabase
       .from('menus')
-      .select('id, cafe_id, menu_name, created_at')
+      .select('id, cafe_id, menu_name, is_verified, created_at')
       .eq('cafe_id', cafeId)
+      .eq('is_verified', true)
       .order('menu_name')
       .then(({ data, error: rpcError }) => {
         if (cancelled) return

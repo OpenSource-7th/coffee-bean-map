@@ -49,7 +49,7 @@ export default function ReviewForm({ cafe, userId, onClose }: ReviewFormProps) {
     })
   }
 
-  const isResultStep = status === 'success' || status === 'rejected' || status === 'error'
+  const isResultStep = status === 'success' || status === 'rejected' || status === 'error' || status === 'queued'
 
   return (
     <div
@@ -232,6 +232,23 @@ export default function ReviewForm({ cafe, userId, onClose }: ReviewFormProps) {
               </span>
               <h4 className="font-serif text-[17px] font-bold text-stone-900">오류가 발생했습니다</h4>
               <p className="text-[13px] text-stone-500">잠시 후 다시 시도해주세요.</p>
+            </div>
+          )}
+
+          {/* Step 3: 임시 저장 (네트워크 오류) */}
+          {step === 3 && status === 'queued' && (
+            <div className="px-6 py-8 flex flex-col items-center gap-3 text-center">
+              <span
+                className="material-symbols-outlined text-[48px] text-amber-400"
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >
+                cloud_off
+              </span>
+              <h4 className="font-serif text-[17px] font-bold text-stone-900">임시 저장되었습니다</h4>
+              <p className="text-[13px] text-stone-500 leading-relaxed">
+                서버에 연결할 수 없어 리뷰가 임시 저장되었습니다.
+                <br />연결이 복구되면 홈 화면 상단 배너에서 재시도할 수 있습니다.
+              </p>
             </div>
           )}
         </div>
