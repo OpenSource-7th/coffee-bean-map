@@ -3,73 +3,6 @@ Coffee Bean Map — 개발 단계별 작업 목록 (steps.txt)
 ============================================================
 
 ------------------------------------------------------------
-Epic 1: 백엔드 및 인프라 구축 (Supabase)
-------------------------------------------------------------
-
-[완료] Feature 1-1. Supabase DB 스키마 설계 및 인덱스 설정
-  - cafes 테이블에서 menu_tags TEXT[] 제거 (menus 별도 테이블로 분리됨)
-  - reviews 테이블에 menu_id FK, sentiment VARCHAR(20), menu_relevance FLOAT 컬럼 추가
-  - menus 테이블 신규 생성 (id UUID PK, cafe_id FK, menu_name VARCHAR(100), created_at)
-  - menu_scores 테이블 신규 생성 (id, cafe_id, menu_id, positive_count, neutral_count,
-                                   negative_count, weighted_score, bayesian_score, updated_at)
-  - GIST 인덱스: cafes.location (ST_DWithin 반경 검색)
-  - btree 인덱스: reviews.cafe_id, reviews.user_id, reviews.created_at DESC
-  - btree 인덱스: (menu_id, bayesian_score DESC) on menu_scores
-
-[완료] Feature 1-2. RLS(Row Level Security) 정책 설정
-  - cafes: anon/authenticated 전체 READ 허용, 쓰기 차단 (변경 없음)
-  - reviews: anon INSERT → authenticated INSERT (auth.uid() 기준)로 정책 변경
-  - menu_scores: authenticated READ 허용
-
-[완료] Feature 1-3. Supabase 클라이언트 초기화
-  - @supabase/supabase-js 패키지 설치
-  - frontend/src/lib/supabase.ts 싱글톤 클라이언트 생성
-  - NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY 연결
-
-[완료] Feature 1-4. 반경 내 카페 목록 조회 함수
-  - ST_DWithin으로 현재 지도 화면 반경 내 카페 fetch (변경 없음)
-  - frontend/src/lib/types.ts: Cafe 타입에서 menu_tags 제거
-  - frontend/src/hooks/useCafes.ts: 반환 구조 확인 및 타입 동기화
-  - supabase/migrations/20260507000001_create_get_cafes_within_radius.sql (RPC 함수)
-
-[완료] Feature 1-5. 리뷰 저장 함수
-  - Binary 분류(confidence >= 0.85) 기준 → 3단계 sentiment(positive/neutral/negative) 기반으로 변경
-  - reviews INSERT 시 sentiment, menu_relevance 컬럼 포함
-  - frontend/src/lib/types.ts: AIAnalyzeResponse 타입을
-    { status, sentiment, confidence, menu_relevance, latency_ms } 로 업데이트
-  - frontend/src/hooks/useSubmitReview.ts 수정
-
-[완료] Feature 1-6. Supabase Auth 설정 (이메일/패스워드)
-  - Supabase Authentication 이메일/패스워드 Provider 활성화
-  - users 테이블 확장: auth.users와 public.profiles 연동 (trigger)
-  - reviews 테이블 user_id → auth.uid() FK 연동 및 RLS 정책 갱신
-  - supabase/migrations/20260507000002_auth_profiles.sql
-
-[완료] Feature 1-7. 개발용 시드 데이터
-  - cafes 시드: menu_tags 제거 (단국대 죽전 캠퍼스 반경 1km 내 카페 12개 유지)
-  - menus 시드 신규 추가: 각 카페별 메뉴 전부 등록
-  - 출처: 소상공인시장진흥공단 상가(상권)정보 경기 202603
-  - supabase/seed.sql
-
-[완료] Feature 1-8. Background Aggregation Worker
-  - reviews INSERT 후 menu_scores 자동 집계 (PostgreSQL AFTER INSERT Trigger 방식 채택)
-  - update_menu_scores_on_review() 함수: 전체 재계산(COUNT FILTER) 방식
-    weighted_score = (pos*1.0 + neu*0.5 + neg*0.0) / total
-    bayesian_score = (C*m + n*weighted) / (C+n), C=5, m=0.6
-  - 시그니처 메뉴 조건 (함수 내 상수로 정의, 쉽게 변경 가능):
-    MINIMUM_REVIEW_COUNT=5, BAYESIAN_THRESHOLD=0.7, POSITIVE_RATIO=0.6
-  - menu_scores 테이블에 is_signature BOOLEAN 컬럼 추가
-  - 엣지 케이스 처리: menu_id NULL → 즉시 종료, sentiment NULL → 카운트 제외,
-    total=0 → 점수 NULL 유지 UPSERT, 첫 리뷰 → ON CONFLICT UPSERT로 신규 행 생성
-  - supabase/migrations/20260522000001_feature_1_8_menu_scores_trigger.sql
-
-[완료] Feature 1-9. GitHub Actions CI 파이프라인
-  - lint → test → Docker build 순서
-  - main 브랜치 push 시 자동 실행
-  - .github/workflows/ci.yml
-
-
-------------------------------------------------------------
 Epic 2: AI 추론 서버 구축 (FastAPI)
 ------------------------------------------------------------
 
@@ -99,84 +32,6 @@ Epic 2: AI 추론 서버 구축 (FastAPI)
            PROMETHEUS_MULTIPROC_DIR 환경변수로 멀티프로세스 메트릭 집계 설정
   - [ ] AVX2 최적화 ONNX Runtime 적용 (현재 onnxruntime==1.18.0 기본 패키지 사용 중)
   - [ ] Cold Start < 2s 목표 (미검증)
-
-[완료] Feature 2-3. /api/v1/analyze-review 엔드포인트 구현
-  - Request: { user_id, cafe_id, menu_id, review_text }
-  - 입력 정제: regex 특수문자 무해화, control token 제거, XSS escape, 300 토큰 제한
-           (ai-server/app/core/text_cleaner.py)
-  - 3자 미만 입력: 400 Bad Request (클라이언트에서도 사전 차단)
-  - ONNX 이중 모델 추론:
-      KcBERT (kcbert_onnx) → menu_relevance 점수 및 관련성 이진 분류
-      KoELECTRA (koelectra_onnx) → sentiment(positive/negative) + confidence
-      menu_relevance < 0.5 또는 confidence < 0.6 → neutral 강제 처리
-  - Response: { status, sentiment, confidence, menu_relevance, latency_ms }
-  - ai-server/app/api/v1/analyze_review.py
-  - ai-server/app/core/text_cleaner.py, ai-server/app/core/config.py
-  ※ frontend/src/hooks/useSubmitReview.ts 에서 이 엔드포인트 호출 코드는 이미 구현 완료
-
-[완료] Feature 2-4. 보안 및 Abuse 대응
-  - [완료] Rate Limiting: slowapi, 동일 IP 기준 /analyze-review 분당 10회 제한
-           ai-server/main.py (Limiter 등록), ai-server/app/api/v1/analyze_review.py
-  - [완료] Spam Detection: URL/전화번호/반복문자/자음모음 패턴 감지 → 422 반환
-           ai-server/app/core/text_cleaner.py (_check_spam 함수)
-  - [완료] 리뷰 Soft Delete 엔드포인트 (PATCH /api/v1/reviews/{review_id}/delete)
-           ai-server/app/api/v1/reviews.py
-           supabase/migrations/20260524000001_feature_2_4_soft_delete.sql
-           (is_deleted, deleted_at 컬럼 추가 + RLS 갱신)
-  - [완료] 신고 처리 API (POST /api/v1/reports)
-           ai-server/app/api/v1/reports.py
-           supabase/migrations/20260524000002_feature_2_4_reports.sql
-           (reports 테이블 신규 생성 + RLS 설정)
-  - [완료] Admin Role 전용 RLS 정책으로 교체
-           is_admin() 함수 (app_metadata.role = 'admin') 기반으로 menus INSERT/DELETE 재설정
-           supabase/migrations/20260524000004_feature_2_4_admin_role_rls.sql
-  - [완료] 신고 Admin 처리 UI
-           frontend/src/app/admin/page.tsx — 탭 전환(메뉴 관리 / 신고 처리)
-           pending 신고 목록 + 리뷰 본문 표시, 인라인 승인/기각 확인 플로우
-           승인 시 reviews soft delete + reports 상태 'approved' 동시 처리
-           window.confirm() → 인라인 확인 버튼으로 교체 (SSR 안전)
-           
-[완료] Feature 2-5. 관리자 API
-  - [완료] menus INSERT/DELETE RLS 정책 추가 (authenticated 사용자 대상, 개발 단계용)
-           supabase/migrations/20260518000003_menus_admin_insert.sql
-           supabase/migrations/20260518000004_menus_admin_delete.sql
-  - [완료] 관리자 프론트엔드 페이지 구현 (frontend/src/app/admin/page.tsx)
-           Admin 전용 로그인 폼 + 카페 선택 + 메뉴 목록 조회/추가/삭제 UI
-           (별도 백엔드 API 없이 Supabase RLS 직접 연동)
-  - [완료] 삭제 시 window.confirm() → confirmDeleteId 상태 기반 인라인 확인 버튼으로 교체 (SSR 안전)
-  - [완료] Admin Role 전용 RLS 정책으로 교체 → Feature 2-4에서 완료
-  - [완료] 리뷰 Soft Delete 엔드포인트 → Feature 2-4에서 완료
-  - [완료] 신고 처리 → Feature 2-4에서 완료
-  - [완료] menus.is_verified 컬럼 추가 + RLS UPDATE 정책 (admin 전용)
-           supabase/migrations/20260524000005_feature_2_5_menus_is_verified.sql
-           기존 메뉴 전부 is_verified=true 으로 일괄 업데이트
-           관리자 추가 메뉴는 is_verified=true 즉시 설정
-           미승인 메뉴(is_verified=false) 승인 UI 추가 (인라인 확인 버튼 패턴)
-
-[완료] Feature 2-6. 블루-그린 무중단 배포 설정
-  - [완료] Docker 블루-그린 전환 스크립트
-           deploy/blue-green.sh: 활성 슬롯 감지 → 비활성 슬롯 빌드/기동 → 헬스체크 → nginx upstream 전환 → 이전 슬롯 종료
-  - [완료] Nginx Reverse Proxy 설정
-           nginx/nginx.conf: /api/ → ai_server_upstream, / → frontend:3000
-           nginx/upstream.conf: blue/green 슬롯 전환 (blue-green.sh가 자동 갱신)
-  - [완료] Linux cgroups CPU 할당
-           docker-compose.prod.yml: ai-server cpus 2.0/2G, nginx 0.5/128M, frontend 1.0/512M
-  - [완료] HPA: CPU 70% 초과 시 수평 확장
-           deploy/scale.sh: docker stats 기반 CPU 모니터링, Gunicorn TTIN/TTOU 시그널로 워커 동적 조정
-           (CPU > 70% → 스케일 업, CPU < 30% → 스케일 다운, MIN_WORKERS=2, MAX_WORKERS=8)
-
-[완료] Feature 2-7. 모니터링 설정
-  - [완료] Prometheus 메트릭 수집
-           ai-server/app/core/metrics.py: INFERENCE_LATENCY(모델별), DB_QUERY_LATENCY(operation별),
-           SENTIMENT_COUNTER, FORCED_NEUTRAL_COUNTER 구현
-           main.py: prometheus_fastapi_instrumentator로 API latency/error rate 자동 수집
-           /metrics 엔드포인트: Gunicorn 멀티프로세스 집계 지원
-           monitoring/prometheus/prometheus.yml: blue/green 슬롯 각각 스크랩 설정
-  - [완료] Grafana 대시보드 구성
-           monitoring/grafana/dashboards/ai-server.json: 17개 패널
-           (API 트래픽, RPS, HTTP 에러율, 슬롯 상태, API Latency P50/P95/P99, 엔드포인트별 응답시간,
-            ONNX 추론 지연, KcBERT/KoELECTRA 추론 P99, Neutral 강제 처리율, DB 쿼리 지연, Sentiment 분포)
-           monitoring/grafana/provisioning/: datasources(Prometheus) + dashboards 자동 프로비저닝
 
 
 ------------------------------------------------------------
@@ -220,31 +75,6 @@ Epic 3: 프론트엔드 - 지도 및 필터 구현
 Epic 4: 프론트엔드 - 리뷰 및 AI 연동
 ------------------------------------------------------------
 
-[완료] Feature 4-1. 로그인/회원가입 UI
-  - 로그인 페이지 (이메일 + 비밀번호 입력, 유효성 검사)
-  - 회원가입 페이지
-  - Supabase Auth 세션 상태 전역 관리 (useAuth 훅)
-  - 인증 상태에 따른 네비게이션 가드 (비로그인 시 리뷰 작성 차단)
-  - frontend/src/hooks/useAuth.ts
-  - frontend/src/components/AuthModal.tsx
-  - Tailwind CSS v4 + 디자인 시스템(Noto Serif/Inter/Material Symbols) 적용
-  - frontend/src/components/ClientProviders.tsx (AuthContext Provider 래퍼)
-  - frontend/src/app/globals.css (디자인 토큰 @theme)
-
-[완료] Feature 4-2. 메뉴 선택형 리뷰 입력 폼 UI
-  - Step 1: 방문 카페 선택
-  - Step 2: 실제 주문한 메뉴 선택 (menus 테이블에서 카페별 메뉴 목록 로드)
-  - Step 3: 텍스트 리뷰 작성
-  - 프론트 사전 검증: 3자 이하 / 특수문자만 포함 시 서버 호출 전 차단
-  - 이벤트 로깅: review_submitted { length_of_text }
-  - frontend/src/components/ReviewForm.tsx
-
-[완료] Feature 4-3. AI 리뷰 분석 파이프라인 연동
-  - AI 서버 POST /api/v1/analyze-review 호출 (user_id, cafe_id, menu_id, review_text)
-  - 응답 sentiment + confidence + menu_relevance 수신
-  - Supabase reviews INSERT (sentiment 포함)
-  - 이벤트 로깅: ai_result { sentiment }
-
 [진행중] Feature 4-4. LocalStorage 북마크 기능
   - [완료] useBookmarks.ts 훅 구현 (LocalStorage ↔ Cafe[] 동기화, isBookmarked/toggleBookmark)
            frontend/src/hooks/useBookmarks.ts
@@ -283,5 +113,75 @@ Epic 5: 개인화 추천 — 선호 메뉴 기반 카페 매칭
   - 추천 카페(선호 메뉴 bayesian_score 상위)에 커스텀 마커 적용 (일반 핀과 색상/아이콘 구분)
   - 지도 상단 또는 사이드패널에 "내 취향 추천 카페 N곳" 배너 표시
   - KakaoMap.tsx 마커 렌더링에 isRecommended prop 추가
+
+
+------------------------------------------------------------
+Epic 6: 서울 카페 시드 데이터 추가
+------------------------------------------------------------
+출처: 소상공인시장진흥공단_상가(상권)정보_서울_202603.csv
+기준: 업종소분류 = '카페', 프렌차이즈·스터디·키즈카페 제외
+      (프렌차이즈: 스타벅스, 이디야, 투썸플레이스, 메가커피, 빽다방, 컴포즈커피,
+       폴바셋, 엔제리너스, 할리스, 탐앤탐스, 커피빈, 파스쿠찌, 더벤티, 공차 등)
+
+서울 구별 일반 카페 현황 (총 18,875개):
+  강남구:   1,792개
+  마포구:   1,608개
+  송파구:   1,115개
+  종로구:   1,090개
+  서초구:   1,089개
+  영등포구: 1,015개
+  중구:       941개
+  강서구:     886개
+  용산구:     744개
+  성북구:     677개
+  성동구:     657개
+  광진구:     657개
+  강동구:     646개
+  관악구:     626개
+  동대문구:   594개
+  서대문구:   586개
+  노원구:     537개
+  은평구:     518개
+  동작구:     507개
+  구로구:     506개
+  금천구:     482개
+  양천구:     476개
+  중랑구:     412개
+  강북구:     403개
+  도봉구:     311개
+
+[ ] Feature 6-1. 강남구 카페 시드 데이터 추가 (1,792개)
+[ ] Feature 6-2. 마포구 카페 시드 데이터 추가 (1,608개)
+[ ] Feature 6-3. 송파구 카페 시드 데이터 추가 (1,115개)
+[ ] Feature 6-4. 종로구 카페 시드 데이터 추가 (1,090개)
+[ ] Feature 6-5. 서초구 카페 시드 데이터 추가 (1,089개)
+[ ] Feature 6-6. 영등포구 카페 시드 데이터 추가 (1,015개)
+[ ] Feature 6-7. 중구 카페 시드 데이터 추가 (941개)
+[ ] Feature 6-8. 강서구 카페 시드 데이터 추가 (886개)
+[ ] Feature 6-9. 용산구 카페 시드 데이터 추가 (744개)
+[ ] Feature 6-10. 성북구 카페 시드 데이터 추가 (677개)
+[ ] Feature 6-11. 성동구 카페 시드 데이터 추가 (657개)
+[ ] Feature 6-12. 광진구 카페 시드 데이터 추가 (657개)
+[ ] Feature 6-13. 강동구 카페 시드 데이터 추가 (646개)
+[ ] Feature 6-14. 관악구 카페 시드 데이터 추가 (626개)
+[ ] Feature 6-15. 동대문구 카페 시드 데이터 추가 (594개)
+[ ] Feature 6-16. 서대문구 카페 시드 데이터 추가 (586개)
+[ ] Feature 6-17. 노원구 카페 시드 데이터 추가 (537개)
+[ ] Feature 6-18. 은평구 카페 시드 데이터 추가 (518개)
+[ ] Feature 6-19. 동작구 카페 시드 데이터 추가 (507개)
+[ ] Feature 6-20. 구로구 카페 시드 데이터 추가 (506개)
+[ ] Feature 6-21. 금천구 카페 시드 데이터 추가 (482개)
+[ ] Feature 6-22. 양천구 카페 시드 데이터 추가 (476개)
+[ ] Feature 6-23. 중랑구 카페 시드 데이터 추가 (412개)
+[ ] Feature 6-24. 강북구 카페 시드 데이터 추가 (403개)
+[완료] Feature 6-25. 도봉구 카페 시드 데이터 추가 (120개, 검증 후 선별)
+
+[ ] Feature 6-25-M. 도봉구 카페 메뉴 추가
+  - 대상: Supabase cafes 테이블 내 도봉구 카페 120개 (address LIKE '%도봉구%')
+  - 방법: 사용자가 직접 각 카페 방문/조회 후 menus 테이블에 INSERT
+  - INSERT 형식:
+      INSERT INTO menus (cafe_id, menu_name)
+      SELECT id, '아메리카노' FROM cafes WHERE name = '카페명' AND address LIKE '%도봉구%';
+  - 메뉴 추가 후 is_verified = true 확인 필요 (기본값 true)
 
 ============================================================
