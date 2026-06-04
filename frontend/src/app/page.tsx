@@ -6,11 +6,14 @@ import AuthModal from "@/components/AuthModal";
 import ReviewForm from "@/components/ReviewForm";
 import CafeDetailModal from "@/components/CafeDetailModal";
 import MyReviewsPanel from "@/components/MyReviewsPanel";
+import OnboardingModal from "@/components/OnboardingModal";
 import { useCafes } from "@/hooks/useCafes";
 import { useAuth } from "@/hooks/useAuth";
 import { useFilter } from "@/hooks/useFilter";
 import { useCafeMenus } from "@/hooks/useCafeMenus";
 import { useSubmitReview } from "@/hooks/useSubmitReview";
+import { usePreferredMenus } from "@/hooks/usePreferredMenus";
+import { useAllCafeMenuScores } from "@/hooks/useAllCafeMenuScores";
 import { Cafe } from "@/lib/types";
 
 export default function Home() {
@@ -24,9 +27,11 @@ export default function Home() {
   const { session, isLoading: authLoading, signOut } = useAuth();
   const { selectedFilters, toggleFilter, clearFilters } = useFilter();
   const { pendingReviews, retryPending, dismissPending } = useSubmitReview();
+  const { preferredMenus, hasInitialized, save } = usePreferredMenus();
 
   const cafeIds = useMemo(() => cafes.map(c => c.id), [cafes]);
   const { cafeMenuMap } = useCafeMenus(cafeIds);
+  const { menuScores } = useAllCafeMenuScores(cafeIds);
 
   const availableMenuFilters = useMemo(() => {
     const all = new Set<string>();
@@ -41,6 +46,46 @@ export default function Home() {
       return selectedFilters.some(filter => menus.some(m => m === filter));
     });
   }, [cafes, selectedFilters, cafeMenuMap]);
+
+  // 선호 메뉴 기반 추천 점수 계산 후 정렬
+  const rankedCafes = useMemo(() => {
+    if (preferredMenus.length === 0) return filteredCafes;
+
+    const scoreMap: Record<string, number> = {};
+    for (const cafe of filteredCafes) {
+      const cafeMenuNames = cafeMenuMap.get(cafe.id) ?? [];
+      const matchedMenuNames = cafeMenuNames.filter(name =>
+        preferredMenus.includes(name)
+      );
+      if (matchedMenuNames.length === 0) {
+        scoreMap[cafe.id] = 0;
+        continue;
+      }
+      // 매칭된 메뉴명 → menu_id 역추적은 불가하므로
+      // cafeMenuMap 기준으로 선호 메뉴가 있는 카페에 menu_scores의 최고 bayesian_score 부여
+      const cafeScores = menuScores.filter(ms => ms.cafe_id === cafe.id);
+      scoreMap[cafe.id] = cafeScores.length > 0
+        ? Math.max(...cafeScores.map(ms => ms.bayesian_score ?? 0))
+        : 0.01; // 메뉴는 있지만 scores 없는 경우 소폭 가산
+    }
+
+    return [...filteredCafes].sort(
+      (a, b) => (scoreMap[b.id] ?? 0) - (scoreMap[a.id] ?? 0)
+    );
+  }, [filteredCafes, preferredMenus, cafeMenuMap, menuScores]);
+
+  // 추천 카페 ID 집합 (지도 강조용)
+  const recommendedCafeIds = useMemo(() => {
+    if (preferredMenus.length === 0) return new Set<string>();
+    return new Set(
+      filteredCafes
+        .filter(cafe => {
+          const cafeMenuNames = cafeMenuMap.get(cafe.id) ?? [];
+          return preferredMenus.some(p => cafeMenuNames.includes(p));
+        })
+        .map(cafe => cafe.id)
+    );
+  }, [filteredCafes, preferredMenus, cafeMenuMap]);
 
   function handleOpenReview() {
     if (!session) {
@@ -87,6 +132,16 @@ export default function Home() {
                 로그인
               </button>
             )
+          )}
+          {/* 선호 메뉴 재설정 버튼 */}
+          {hasInitialized && (
+            <button
+              onClick={() => save([])}
+              className="px-3 py-1.5 rounded-lg border border-stone-200 text-stone-500 text-[12px] hover:bg-stone-50 transition-colors"
+              title="선호 메뉴 재설정"
+            >
+              <span className="material-symbols-outlined text-[16px] align-middle">tune</span>
+            </button>
           )}
         </div>
       </header>
@@ -181,7 +236,7 @@ export default function Home() {
                 {cafesLoading && (
                   <p className="text-[14px] text-stone-400 px-1 py-4">불러오는 중...</p>
                 )}
-                {!cafesLoading && filteredCafes.length === 0 && (
+                {!cafesLoading && rankedCafes.length === 0 && (
                   <div className="px-1 py-8 text-center">
                     <span
                       className="material-symbols-outlined text-[36px] text-stone-300 block mb-2"
@@ -203,13 +258,28 @@ export default function Home() {
                     )}
                   </div>
                 )}
-                {filteredCafes.map((cafe) => (
+                {rankedCafes.map((cafe) => (
                   <div
                     key={cafe.id}
                     onClick={() => setSelectedCafe(cafe)}
-                    className="bg-white p-4 rounded-xl border border-stone-200/60 hover:border-stone-300 transition-colors cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+                    className={`bg-white p-4 rounded-xl border transition-colors cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)] ${
+                      recommendedCafeIds.has(cafe.id)
+                        ? "border-[#ac3509]/40 ring-1 ring-[#ac3509]/20"
+                        : "border-stone-200/60 hover:border-stone-300"
+                    }`}
                   >
-                    <p className="font-bold text-[15px] text-stone-800">{cafe.name}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-bold text-[15px] text-stone-800">{cafe.name}</p>
+                      {recommendedCafeIds.has(cafe.id) && (
+                        <span
+                          className="material-symbols-outlined text-[#ac3509] text-[15px]"
+                          style={{ fontVariationSettings: "'FILL' 1" }}
+                          title="선호 메뉴 보유"
+                        >
+                          recommend
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[12px] text-stone-500 mt-0.5">{cafe.address}</p>
                   </div>
                 ))}
@@ -226,6 +296,7 @@ export default function Home() {
             cafes={filteredCafes}
             onPinClick={setSelectedCafe}
             onCenterChanged={(lat, lng) => setCenter({ lat, lng })}
+            recommendedCafeIds={recommendedCafeIds}
           />
         </div>
       </main>
@@ -257,6 +328,11 @@ export default function Home() {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
       />
+
+      {/* 온보딩 모달 — localStorage 미설정 시 표시 */}
+      {hasInitialized === false && (
+        <OnboardingModal onComplete={save} />
+      )}
     </div>
   );
 }

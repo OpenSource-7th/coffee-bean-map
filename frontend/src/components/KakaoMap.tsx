@@ -7,6 +7,7 @@ interface Props {
   cafes: Cafe[];
   onPinClick: (cafe: Cafe) => void;
   onCenterChanged: (lat: number, lng: number) => void;
+  recommendedCafeIds?: Set<string>;
 }
 
 declare global {
@@ -15,7 +16,7 @@ declare global {
   }
 }
 
-export default function KakaoMap({ cafes, onPinClick, onCenterChanged }: Props) {
+export default function KakaoMap({ cafes, onPinClick, onCenterChanged, recommendedCafeIds }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
@@ -56,7 +57,17 @@ export default function KakaoMap({ cafes, onPinClick, onCenterChanged }: Props) 
 
     cafes.forEach((cafe) => {
       const position = new window.kakao.maps.LatLng(cafe.lat, cafe.lng);
-      const marker = new window.kakao.maps.Marker({ position });
+      const isRecommended = recommendedCafeIds?.has(cafe.id) ?? false;
+
+      // 추천 카페는 강조 마커 (크기 키우고 빨간 계열 이미지)
+      const markerOptions: any = { position };
+      if (isRecommended) {
+        const imageSrc = "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png";
+        const imageSize = new window.kakao.maps.Size(24, 35);
+        markerOptions.image = new window.kakao.maps.MarkerImage(imageSrc, imageSize);
+      }
+
+      const marker = new window.kakao.maps.Marker(markerOptions);
       marker.setMap(mapInstanceRef.current);
 
       window.kakao.maps.event.addListener(marker, "click", () => {
@@ -65,7 +76,7 @@ export default function KakaoMap({ cafes, onPinClick, onCenterChanged }: Props) 
 
       markersRef.current.push(marker);
     });
-  }, [cafes]);
+  }, [cafes, recommendedCafeIds]);
 
   return <div ref={mapRef} style={{ width: "100%", height: "100%" }} />;
 }
