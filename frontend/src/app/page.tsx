@@ -17,7 +17,7 @@ import { useAllCafeMenuScores } from "@/hooks/useAllCafeMenuScores";
 import { Cafe } from "@/lib/types";
 
 export default function Home() {
-  const [center, setCenter] = useState({ lat: 37.3219, lng: 127.1269 });
+  const [center, setCenter] = useState({ lat: 37.5665, lng: 126.9780 });
   const [selectedCafe, setSelectedCafe] = useState<Cafe | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isReviewFormOpen, setIsReviewFormOpen] = useState(false);

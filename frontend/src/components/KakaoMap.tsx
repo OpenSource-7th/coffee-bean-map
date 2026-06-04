@@ -26,7 +26,7 @@ export default function KakaoMap({ cafes, onPinClick, onCenterChanged, recommend
 
     const initMap = () => {
       const options = {
-        center: new window.kakao.maps.LatLng(37.3219, 127.1269),
+        center: new window.kakao.maps.LatLng(37.5665, 126.9780),
         level: 4,
       };
       const map = new window.kakao.maps.Map(mapRef.current, options);

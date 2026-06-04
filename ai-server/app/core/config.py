@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    KCBERT_ONNX_MODEL_DIR: str = "app/models/kcbert_onnx/onnx_kcbert_lora"
+    KCBERT_ONNX_MODEL_DIR: str = "app/models/kcbert_onnx/onnx_kcbert_fft"
     KOELECTRA_ONNX_MODEL_DIR: str = "app/models/koelectra_onnx/onnx_koelectra"
 
     MAX_TOKEN_LENGTH: int = 300

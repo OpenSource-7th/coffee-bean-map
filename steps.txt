@@ -6,113 +6,18 @@ Coffee Bean Map — 개발 단계별 작업 목록 (steps.txt)
 Epic 2: AI 추론 서버 구축 (FastAPI)
 ------------------------------------------------------------
 
-[진행중] Feature 2-1. KcBERT 모델 Fine-Tuning (3단계 감성 분류)
-  - [완료] 학습/검증 데이터셋 구성 (ai-server/models/train_dataset/, valid_dataset/)
-           커피/디저트/음료/직원/인테리어/식당/TMI 리뷰 CSV 7종 + coffee_professional_reviews2.csv
-  - [완료] ModelTrain 클래스 구현 (ai-server/models/train.py)
-           Full Fine-Tuning / LoRA 선택, AdamW 옵티마이저, F1 Score 검증
-  - [완료] 3단계 감성 분류 이중 모델 구조 구현
-           KcBERT (kcbert_onnx) → menu_relevance 이진 분류기 (KcbertRelevancePredictor)
-           KoELECTRA (koelectra_onnx) → sentiment 이진 분류기 (KoelectraSentimentPredictor)
-           confidence < 0.6 또는 menu_relevance < 0.5 → neutral 강제 → 3단계 감성 실현
-           (ai-server/app/models/predict.py)
-  - [ ] 악성 프롬프트 패턴 학습 데이터 포함 (Prompt Injection 방어)
-  - 목표: Classification Accuracy 90% 이상, False Positive Rate 5% 미만
-
 [진행중] Feature 2-2. KcBERT 모델 ONNX 양자화 및 FastAPI 서버 세팅
-  - [완료] 파인튜닝 모델 → ONNX 변환 + INT8 양자화 스크립트
-           (ai-server/app/models/onnx_kcbert.py, KAN-3 커밋)
-  - [완료] ai-server/app/models/kcbert_onnx/ 에 .onnx 파일 배치
-           (model.onnx, model_quantized.onnx, tokenizer 파일 일체)
-  - [완료] Dockerfile 작성 (dev: uvicorn --reload / runner: gunicorn 멀티워커)
-  - [완료] ai-server/main.py 추론 라우터 등록
-           analyze_review, reviews, reports 라우터 포함, /health + /metrics 엔드포인트 구현
-  - [완료] Gunicorn(멀티 워커) + Uvicorn 서버 설정
-           Dockerfile runner 스테이지: gunicorn + UvicornWorker --workers 3
-           PROMETHEUS_MULTIPROC_DIR 환경변수로 멀티프로세스 메트릭 집계 설정
-  - [ ] AVX2 최적화 ONNX Runtime 적용 (현재 onnxruntime==1.18.0 기본 패키지 사용 중)
-  - [ ] Cold Start < 2s 목표 (미검증)
-
-
-------------------------------------------------------------
-Epic 3: 프론트엔드 - 지도 및 필터 구현
-------------------------------------------------------------
-
-[진행중] Feature 3-1. 카카오 맵 API 연동 및 지도 핀 렌더링
-  - [완료] Kakao Map 초기화, 현재 위치(죽전 캠퍼스) 중심 렌더링
-           (frontend/src/components/KakaoMap.tsx)
-  - [완료] 지도 dragend → onCenterChanged 콜백으로 중심 좌표 갱신
-  - [완료] 지도 10km 이상 급이동 시 캐시 초기화 + 재요청
-           (frontend/src/hooks/useCafes.ts — LARGE_MOVE_THRESHOLD_METERS)
-  - [완료] 기본 마커 렌더링 및 핀 클릭 → 상세 모달 연결
-
-[ ] Feature 3-2. 클라이언트 사이드 필터링 로직 구현
-  - 필터 칩(Pill) UI 컴포넌트 (아메리카노, 라떼, 카푸치노, 핸드드립, 콜드브루 등)
-  - OR 조건 메모리 내 배열 필터링 (50ms 이하, 핀 500개 기준)
-  - 이벤트 로깅: filter_clicked { category }
-  - frontend/src/hooks/useFilter.ts
-  ※ KAN-22 커밋 이력은 있으나 현재 H_develop 브랜치에 useFilter.ts 및 필터 UI 코드 미존재 (머지 충돌 해소 과정에서 누락된 것으로 보임 → 재구현 필요)
-  ※ page.tsx, KakaoMap.tsx 어디에도 필터 관련 props/state 없음 — 완전 처음부터 재구현 필요
-
-[진행중] Feature 3-3. 핀 클릭 시 상세 정보 모달
-  - [완료] 기본 인라인 모달 구현 (frontend/src/app/page.tsx 내 인라인 — 카페 이름/주소 표시)
-  - [완료] 별도 CafeDetailModal 컴포넌트 분리 (frontend/src/components/CafeDetailModal.tsx)
-  - [미완] 메뉴 목록 표시 — 현재 cafe.menu_tags 정적 표시, menus 테이블 연동 미구현
-  - [ ] 시그니처 메뉴 왕관 아이콘 표시 (menu_scores 연동)
-
-[ ] Feature 3-4. 필터 결과 0개 UX 처리
-  - "이 지역에는 아직 해당 메뉴를 잘하는 곳이 없네요. 필터를 초기화해 볼까요?"
-  - 필터 초기화 버튼
-
-[ ] Feature 3-5. 시그니처 메뉴 UI
-  - 카페 모달 내 메뉴별 Bayesian score 표시
-  - 조건 충족 메뉴에 왕관 아이콘 표시
-  - menu_scores 데이터 연동
-  ※ KAN-36 브랜치 머지됐으나 실제 코드(CafeDetailModal.tsx, page.tsx 등)에서 구현 확인 안 됨 → 재구현 필요
-
-
-------------------------------------------------------------
-Epic 4: 프론트엔드 - 리뷰 및 AI 연동
-------------------------------------------------------------
-
-[진행중] Feature 4-4. LocalStorage 북마크 기능
-  - [완료] useBookmarks.ts 훅 구현 (LocalStorage ↔ Cafe[] 동기화, isBookmarked/toggleBookmark)
-           frontend/src/hooks/useBookmarks.ts
-  - [미완] CafeDetailModal.tsx에 북마크 토글 버튼 UI 연동 미구현
-  ※ KAN-26 브랜치 머지됐으나 모달 UI 연동 코드 없음
-
-[진행중] Feature 4-5. 내가 쓴 리뷰 모아보기
-  - [완료] useMyReviews.ts 훅 구현 (user_id 기준 리뷰 목록 Supabase 조회)
-           frontend/src/hooks/useMyReviews.ts
-  - [완료] MyReviewsPanel.tsx 컴포넌트 구현 (리뷰 목록 + 유효/무효 뱃지 표시)
-           frontend/src/components/MyReviewsPanel.tsx
-  - [완료] page.tsx에서 MyReviewsPanel 연동 (session.user.id 전달)
-  - [ ] 네트워크 단절 시 LocalStorage 임시 저장 후 복구
-
+  - [ ] reviews, reports 라우터 main.py에 미등록 — 실제 서빙 안 됨, 등록 필요
+  - [ ] config.py KCBERT_ONNX_MODEL_DIR가 onnx_kcbert_lora를 가리킴
+           KAN-41에서 교체된 onnx_kcbert_fft 모델을 사용하도록 수정 필요
 
 ------------------------------------------------------------
 Epic 5: 개인화 추천 — 선호 메뉴 기반 카페 매칭
 ------------------------------------------------------------
 
-[ ] Feature 5-1. 초기 진입 온보딩 — 선호 메뉴 선택
-  - 앱 첫 진입 시 (LocalStorage에 선호 메뉴 미설정) 온보딩 화면 노출
-  - 메뉴 카테고리 칩 선택 UI (에스프레소, 라떼, 핸드드립, 콜드브루, 카푸치노 등)
-  - 최소 1개 이상 선택 강제, 선택 완료 → LocalStorage 저장 후 지도 화면 진입
-  - 선호 메뉴 재설정: 설정 버튼에서 언제든지 변경 가능
-  - frontend/src/hooks/usePreferences.ts (preferredMenus: string[] 저장/조회)
-  - frontend/src/components/OnboardingModal.tsx
+[진행중] Feature 5-1. 초기 진입 온보딩 — 선호 메뉴 선택
+  - [ ] 선호 메뉴 재설정: 설정 버튼에서 언제든지 변경 가능 (reset() 구현됐으나 UI 진입점 없음)
 
-[ ] Feature 5-2. 선호 메뉴 기반 카페 추천 정렬 로직
-  - 지도 로드 후 카페 목록을 선호 메뉴 × menu_scores 기준으로 정렬
-  - 정렬 기준: 해당 카페 내 선호 메뉴의 bayesian_score 최댓값 (OR 조건, 50ms 이하)
-  - Supabase RPC 또는 클라이언트 정렬: menu_scores JOIN menus → 선호 메뉴명 매칭 후 score 계산
-  - 선호 메뉴 일치 카페 없을 경우 기존 거리 기반 순서 유지
-  - frontend/src/hooks/useRecommendedCafes.ts
-
-[ ] Feature 5-3. 추천 카페 지도 강조 표시
-  - 추천 카페(선호 메뉴 bayesian_score 상위)에 커스텀 마커 적용 (일반 핀과 색상/아이콘 구분)
-  - 지도 상단 또는 사이드패널에 "내 취향 추천 카페 N곳" 배너 표시
-  - KakaoMap.tsx 마커 렌더링에 isRecommended prop 추가
 
 
 ------------------------------------------------------------
