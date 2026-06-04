@@ -5,7 +5,7 @@
   "is_local": true,
   "local_files_only": true,
   "mask_token": "[MASK]",
-  "max_length": 256,
+  "max_length": 300,
   "model_max_length": 300,
   "pad_to_multiple_of": null,
   "pad_token": "[PAD]",
