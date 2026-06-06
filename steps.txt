@@ -77,16 +77,8 @@ Epic 6: 서울 카페 시드 데이터 추가
 [ ] Feature 6-20. 구로구 카페 시드 데이터 추가 (506개)
 [ ] Feature 6-21. 금천구 카페 시드 데이터 추가 (482개)
 [ ] Feature 6-22. 양천구 카페 시드 데이터 추가 (476개)
-[ ] Feature 6-23. 중랑구 카페 시드 데이터 추가 (412개)
-[ ] Feature 6-24. 강북구 카페 시드 데이터 추가 (403개)
+[완료] Feature 6-23. 중랑구 카페 시드 데이터 추가 (412개)
+[완료] Feature 6-24. 강북구 카페 시드 데이터 추가 (403개)
 [완료] Feature 6-25. 도봉구 카페 시드 데이터 추가 (120개, 검증 후 선별)
-
-[ ] Feature 6-25-M. 도봉구 카페 메뉴 추가
-  - 대상: Supabase cafes 테이블 내 도봉구 카페 120개 (address LIKE '%도봉구%')
-  - 방법: 사용자가 직접 각 카페 방문/조회 후 menus 테이블에 INSERT
-  - INSERT 형식:
-      INSERT INTO menus (cafe_id, menu_name)
-      SELECT id, '아메리카노' FROM cafes WHERE name = '카페명' AND address LIKE '%도봉구%';
-  - 메뉴 추가 후 is_verified = true 확인 필요 (기본값 true)
 
 ============================================================

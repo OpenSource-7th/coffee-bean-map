@@ -7,6 +7,22 @@ import type { Session } from "@supabase/supabase-js";
 interface Cafe {
   id: string;
   name: string;
+  address: string;
+}
+
+function extractDistrictLabel(address: string): string {
+  if (address.startsWith("서울특별시")) {
+    const m = address.match(/서울특별시 ([가-힣]+구)/);
+    return m ? `서울 ${m[1]}` : "서울";
+  }
+  if (address.startsWith("경기도")) {
+    const m = address.match(/경기도 ([가-힣]+시) ([가-힣]+구)/);
+    if (m) return `경기 ${m[1]} ${m[2]}`;
+    const m2 = address.match(/경기도 ([가-힣]+[시군])/);
+    return m2 ? `경기 ${m2[1]}` : "경기도";
+  }
+  const parts = address.split(" ");
+  return parts.slice(0, 2).join(" ");
 }
 
 interface Menu {
@@ -122,8 +138,8 @@ export default function AdminPage() {
     if (!session) return;
     supabase
       .from("cafes")
-      .select("id, name")
-      .order("name")
+      .select("id, name, address")
+      .order("address")
       .then(({ data }) => setCafes(data ?? []));
   }, [session]);
 
@@ -153,6 +169,7 @@ export default function AdminPage() {
   }, [session, isAdmin, activeTab]);
 
   async function handleMenuAdd() {
+    if (menuLoading) return;
     const name = newMenuName.trim();
     if (!selectedCafeId || !name) return;
     setMenuLoading(true);
@@ -288,9 +305,22 @@ export default function AdminPage() {
               style={{ width: "100%", padding: "10px", borderRadius: 8, border: "1px solid #ccc", fontSize: 14 }}
             >
               <option value="">-- 카페를 선택하세요 --</option>
-              {cafes.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
+              {(() => {
+                const grouped = cafes.reduce<Record<string, Cafe[]>>((acc, cafe) => {
+                  const label = extractDistrictLabel(cafe.address);
+                  (acc[label] ??= []).push(cafe);
+                  return acc;
+                }, {});
+                return Object.entries(grouped)
+                  .sort(([a], [b]) => a.localeCompare(b, "ko"))
+                  .map(([district, list]) => (
+                    <optgroup key={district} label={district}>
+                      {list.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </optgroup>
+                  ));
+              })()}
             </select>
           </section>
 
