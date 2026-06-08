@@ -51,6 +51,37 @@ export interface MenuScore {
   updated_at: string
 }
 
+export interface UserTasteProfile {
+  user_id: string
+  acidity: number
+  sweetness: number
+  bitterness: number
+  nutty: number
+  body: number
+  aroma: number
+  decaf: number
+  taste_match_weight: number
+  similar_user_weight: number
+  sentiment_weight: number
+  popularity_weight: number
+  created_at: string
+  updated_at: string
+}
+
+export interface MenuTasteProfile {
+  menu_id: string
+  cafe_id: string
+  acidity_score: number
+  sweetness_score: number
+  bitterness_score: number
+  nutty_score: number
+  body_score: number
+  aroma_score: number
+  decaf_score: number
+  created_at: string
+  updated_at: string
+}
+
 export interface PendingReview {
   id: string
   cafeId: string

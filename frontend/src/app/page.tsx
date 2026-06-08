@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import KakaoMap from "@/components/KakaoMap";
 import AuthModal from "@/components/AuthModal";
 import ReviewForm from "@/components/ReviewForm";
 import CafeDetailModal from "@/components/CafeDetailModal";
 import MyReviewsPanel from "@/components/MyReviewsPanel";
 import OnboardingModal from "@/components/OnboardingModal";
+import CoffeeTasteTestModal from "@/components/CoffeeTasteTestModal";
 import { useCafes } from "@/hooks/useCafes";
 import { useAuth } from "@/hooks/useAuth";
 import { useFilter } from "@/hooks/useFilter";
@@ -14,78 +15,200 @@ import { useCafeMenus } from "@/hooks/useCafeMenus";
 import { useSubmitReview } from "@/hooks/useSubmitReview";
 import { usePreferredMenus } from "@/hooks/usePreferredMenus";
 import { useAllCafeMenuScores } from "@/hooks/useAllCafeMenuScores";
+import { useRecommendations } from "@/hooks/useRecommendations";
 import { Cafe } from "@/lib/types";
+import {
+  loadCoffeeTasteTestResult,
+  type CoffeeTasteTestResult,
+} from "@/lib/coffeeTasteTest";
+
+const PERSONALIZED_FILTER = "사용자 맞춤 추천";
 
 export default function Home() {
   const [center, setCenter] = useState({ lat: 37.5665, lng: 126.9780 });
   const [selectedCafe, setSelectedCafe] = useState<Cafe | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isReviewFormOpen, setIsReviewFormOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isTasteTestOpen, setIsTasteTestOpen] = useState(false);
+  const [tasteTestResult, setTasteTestResult] = useState<CoffeeTasteTestResult | null>(null);
   const [sidebarTab, setSidebarTab] = useState<"list" | "myreviews">("list");
 
   const { cafes, isLoading: cafesLoading } = useCafes({ center, radiusMeters: 1000 });
   const { session, isLoading: authLoading, signOut } = useAuth();
   const { selectedFilters, toggleFilter, clearFilters } = useFilter();
   const { pendingReviews, retryPending, dismissPending } = useSubmitReview();
-  const { preferredMenus, hasInitialized, save } = usePreferredMenus();
+  const { hasInitialized, save } = usePreferredMenus();
+
+  useEffect(() => {
+    setTasteTestResult(loadCoffeeTasteTestResult());
+  }, []);
 
   const cafeIds = useMemo(() => cafes.map(c => c.id), [cafes]);
-  const { cafeMenuMap } = useCafeMenus(cafeIds);
+  const { cafeMenuMap, cafeMenuItemsMap } = useCafeMenus(cafeIds);
   const { menuScores } = useAllCafeMenuScores(cafeIds);
+  const selectedStandardFilters = useMemo(
+    () => selectedFilters.filter(filter => filter !== PERSONALIZED_FILTER),
+    [selectedFilters]
+  );
+  const isPersonalizedFilterActive = selectedFilters.includes(PERSONALIZED_FILTER);
+  const { recommendations: personalizedRecommendations } = useRecommendations({
+    userId: session?.user.id ?? null,
+    limit: 50,
+    enabled: isPersonalizedFilterActive,
+    userVector: tasteTestResult?.vector ?? null,
+    weights: tasteTestResult?.weights ?? null,
+  });
 
   const availableMenuFilters = useMemo(() => {
     const all = new Set<string>();
     cafeMenuMap.forEach(menus => menus.forEach(m => all.add(m)));
-    return Array.from(all).sort();
+    return [...Array.from(all).sort(), PERSONALIZED_FILTER];
   }, [cafeMenuMap]);
+
+  const menuScoreByMenuId = useMemo(
+    () => new Map(menuScores.map(score => [score.menu_id, score])),
+    [menuScores]
+  );
+
+  const personalizedRecommendationByMenuId = useMemo(
+    () => new Map(personalizedRecommendations.map(rec => [rec.menu_id, rec])),
+    [personalizedRecommendations]
+  );
+
+  const personalizedCafeIds = useMemo(
+    () => new Set(personalizedRecommendations.map(rec => rec.cafe_id)),
+    [personalizedRecommendations]
+  );
+
+  const bayesianRecommendedMenuIds = useMemo(() => {
+    if (selectedStandardFilters.length === 0) return new Set<string>();
+
+    const ids = new Set<string>();
+    cafeMenuItemsMap.forEach((menus) => {
+      menus.forEach((menu) => {
+        if (selectedStandardFilters.includes(menu.menu_name)) ids.add(menu.id);
+      });
+    });
+    return ids;
+  }, [cafeMenuItemsMap, selectedStandardFilters]);
+
+  const bayesianCafeScoreMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (selectedStandardFilters.length === 0) return map;
+
+    cafes.forEach((cafe) => {
+      const matchingMenus = (cafeMenuItemsMap.get(cafe.id) ?? []).filter(menu =>
+        selectedStandardFilters.includes(menu.menu_name)
+      );
+      if (matchingMenus.length === 0) return;
+
+      const bestScore = Math.max(
+        ...matchingMenus.map(menu => menuScoreByMenuId.get(menu.id)?.bayesian_score ?? 0.01)
+      );
+      map.set(cafe.id, bestScore);
+    });
+
+    return map;
+  }, [cafes, cafeMenuItemsMap, menuScoreByMenuId, selectedStandardFilters]);
+
+  const bayesianCafeIds = useMemo(
+    () => new Set(bayesianCafeScoreMap.keys()),
+    [bayesianCafeScoreMap]
+  );
 
   const filteredCafes = useMemo(() => {
     if (selectedFilters.length === 0) return cafes;
+
     return cafes.filter(cafe => {
       const menus = cafeMenuMap.get(cafe.id) ?? [];
-      return selectedFilters.some(filter => menus.some(m => m === filter));
+      const matchesBayesian = selectedStandardFilters.some(filter => menus.some(m => m === filter));
+      const matchesPersonalized = isPersonalizedFilterActive && personalizedCafeIds.has(cafe.id);
+      return matchesBayesian || matchesPersonalized;
     });
-  }, [cafes, selectedFilters, cafeMenuMap]);
+  }, [cafes, selectedFilters.length, cafeMenuMap, selectedStandardFilters, isPersonalizedFilterActive, personalizedCafeIds]);
 
-  // 선호 메뉴 기반 추천 점수 계산 후 정렬
+  // 일반 메뉴 태그는 Bayesian 점수, 사용자 맞춤 태그는 취향 벡터 추천 점수로 정렬
   const rankedCafes = useMemo(() => {
-    if (preferredMenus.length === 0) return filteredCafes;
+    if (selectedFilters.length === 0) return filteredCafes;
 
-    const scoreMap: Record<string, number> = {};
-    for (const cafe of filteredCafes) {
-      const cafeMenuNames = cafeMenuMap.get(cafe.id) ?? [];
-      const matchedMenuNames = cafeMenuNames.filter(name =>
-        preferredMenus.includes(name)
+    const personalizedScoreByCafeId = new Map<string, number>();
+    personalizedRecommendations.forEach((rec) => {
+      personalizedScoreByCafeId.set(
+        rec.cafe_id,
+        Math.max(personalizedScoreByCafeId.get(rec.cafe_id) ?? 0, rec.final_score)
       );
-      if (matchedMenuNames.length === 0) {
-        scoreMap[cafe.id] = 0;
-        continue;
-      }
-      // 매칭된 메뉴명 → menu_id 역추적은 불가하므로
-      // cafeMenuMap 기준으로 선호 메뉴가 있는 카페에 menu_scores의 최고 bayesian_score 부여
-      const cafeScores = menuScores.filter(ms => ms.cafe_id === cafe.id);
-      scoreMap[cafe.id] = cafeScores.length > 0
-        ? Math.max(...cafeScores.map(ms => ms.bayesian_score ?? 0))
-        : 0.01; // 메뉴는 있지만 scores 없는 경우 소폭 가산
-    }
+    });
 
     return [...filteredCafes].sort(
-      (a, b) => (scoreMap[b.id] ?? 0) - (scoreMap[a.id] ?? 0)
-    );
-  }, [filteredCafes, preferredMenus, cafeMenuMap, menuScores]);
+      (a, b) => {
+        const aTypeRank =
+          (bayesianCafeIds.has(a.id) && personalizedCafeIds.has(a.id)) ? 3 :
+            personalizedCafeIds.has(a.id) ? 2 :
+              bayesianCafeIds.has(a.id) ? 1 : 0;
+        const bTypeRank =
+          (bayesianCafeIds.has(b.id) && personalizedCafeIds.has(b.id)) ? 3 :
+            personalizedCafeIds.has(b.id) ? 2 :
+              bayesianCafeIds.has(b.id) ? 1 : 0;
 
-  // 추천 카페 ID 집합 (지도 강조용)
-  const recommendedCafeIds = useMemo(() => {
-    if (preferredMenus.length === 0) return new Set<string>();
-    return new Set(
-      filteredCafes
-        .filter(cafe => {
-          const cafeMenuNames = cafeMenuMap.get(cafe.id) ?? [];
-          return preferredMenus.some(p => cafeMenuNames.includes(p));
-        })
-        .map(cafe => cafe.id)
+        if (aTypeRank !== bTypeRank) return bTypeRank - aTypeRank;
+
+        const aScore = isPersonalizedFilterActive
+          ? personalizedScoreByCafeId.get(a.id) ?? bayesianCafeScoreMap.get(a.id) ?? 0
+          : bayesianCafeScoreMap.get(a.id) ?? 0;
+        const bScore = isPersonalizedFilterActive
+          ? personalizedScoreByCafeId.get(b.id) ?? bayesianCafeScoreMap.get(b.id) ?? 0
+          : bayesianCafeScoreMap.get(b.id) ?? 0;
+
+        return bScore - aScore;
+      }
     );
-  }, [filteredCafes, preferredMenus, cafeMenuMap]);
+  }, [
+    filteredCafes,
+    selectedFilters.length,
+    personalizedRecommendations,
+    bayesianCafeIds,
+    personalizedCafeIds,
+    isPersonalizedFilterActive,
+    bayesianCafeScoreMap,
+  ]);
+
+  const recommendationTypes = useMemo(() => {
+    const map = new Map<string, "bayesian" | "personalized" | "both">();
+    bayesianCafeIds.forEach(id => map.set(id, "bayesian"));
+    if (isPersonalizedFilterActive) {
+      personalizedCafeIds.forEach(id => {
+        map.set(id, map.has(id) ? "both" : "personalized");
+      });
+    }
+    return map;
+  }, [bayesianCafeIds, personalizedCafeIds, isPersonalizedFilterActive]);
+
+  const menuRecommendationTypes = useMemo(() => {
+    const map = new Map<string, "bayesian" | "personalized" | "both">();
+    bayesianRecommendedMenuIds.forEach(id => map.set(id, "bayesian"));
+    if (isPersonalizedFilterActive) {
+      personalizedRecommendationByMenuId.forEach((_rec, id) => {
+        map.set(id, map.has(id) ? "both" : "personalized");
+      });
+    }
+    return map;
+  }, [bayesianRecommendedMenuIds, personalizedRecommendationByMenuId, isPersonalizedFilterActive]);
+
+  function cardRecommendationClasses(cafeId: string): string {
+    const type = recommendationTypes.get(cafeId);
+    if (type === "both") return "border-purple-400/60 ring-1 ring-purple-300/50";
+    if (type === "personalized") return "border-blue-400/60 ring-1 ring-blue-300/40";
+    if (type === "bayesian") return "border-[#ac3509]/40 ring-1 ring-[#ac3509]/20";
+    return "border-stone-200/60 hover:border-stone-300";
+  }
+
+  function recommendationIconClasses(cafeId: string): string {
+    const type = recommendationTypes.get(cafeId);
+    if (type === "both") return "text-purple-600";
+    if (type === "personalized") return "text-blue-600";
+    return "text-[#ac3509]";
+  }
 
   function handleOpenReview() {
     if (!session) {
@@ -93,6 +216,14 @@ export default function Home() {
       return;
     }
     setIsReviewFormOpen(true);
+  }
+
+  function handleTasteTestComplete(result: CoffeeTasteTestResult) {
+    setTasteTestResult(result);
+    setIsSettingsOpen(false);
+    if (!selectedFilters.includes(PERSONALIZED_FILTER)) {
+      toggleFilter(PERSONALIZED_FILTER);
+    }
   }
 
   return (
@@ -133,16 +264,55 @@ export default function Home() {
               </button>
             )
           )}
-          {/* 선호 메뉴 재설정 버튼 */}
-          {hasInitialized && (
+          {/* 설정 메뉴 */}
+          <div className="relative">
             <button
-              onClick={() => save([])}
+              onClick={() => setIsSettingsOpen((open) => !open)}
               className="px-3 py-1.5 rounded-lg border border-stone-200 text-stone-500 text-[12px] hover:bg-stone-50 transition-colors"
-              title="선호 메뉴 재설정"
+              title="설정"
             >
               <span className="material-symbols-outlined text-[16px] align-middle">tune</span>
             </button>
-          )}
+            {isSettingsOpen && (
+              <div className="absolute right-0 top-10 w-64 rounded-2xl border border-stone-200 bg-white shadow-xl p-4 z-50">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[13px] font-bold text-stone-800">커피 취향 테스트</p>
+                    <p className="text-[11px] text-stone-400 mt-1 leading-relaxed">
+                      답변을 바탕으로 사용자 맞춤 추천 기준을 조정합니다.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsTasteTestOpen(true);
+                      setIsSettingsOpen(false);
+                    }}
+                    className="shrink-0 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[12px] font-semibold hover:bg-blue-700 transition-colors"
+                  >
+                    {tasteTestResult ? "재검사" : "검사"}
+                  </button>
+                </div>
+
+                {tasteTestResult && (
+                  <p className="text-[11px] text-stone-400 mt-3">
+                    최근 검사: {new Date(tasteTestResult.completedAt).toLocaleDateString("ko-KR")}
+                  </p>
+                )}
+
+                {hasInitialized && (
+                  <button
+                    onClick={() => {
+                      save([]);
+                      setIsSettingsOpen(false);
+                    }}
+                    className="mt-3 w-full px-3 py-2 rounded-lg border border-stone-200 text-stone-500 text-[12px] font-semibold hover:bg-stone-50 transition-colors"
+                  >
+                    선호 메뉴 초기화
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -178,14 +348,19 @@ export default function Home() {
             <div className="flex gap-1.5 flex-wrap">
               {availableMenuFilters.map(filter => {
                 const active = selectedFilters.includes(filter);
+                const isPersonalized = filter === PERSONALIZED_FILTER;
                 return (
                   <button
                     key={filter}
                     onClick={() => toggleFilter(filter)}
                     className={`px-3 py-1 rounded-full text-[12px] font-semibold border transition-colors ${
-                      active
-                        ? "bg-[#ac3509] text-white border-[#ac3509]"
-                        : "bg-white text-stone-600 border-stone-300 hover:border-stone-400"
+                      active && isPersonalized
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : active
+                          ? "bg-[#ac3509] text-white border-[#ac3509]"
+                          : isPersonalized
+                            ? "bg-white text-blue-600 border-blue-200 hover:border-blue-400"
+                            : "bg-white text-stone-600 border-stone-300 hover:border-stone-400"
                     }`}
                   >
                     {filter}
@@ -245,7 +420,7 @@ export default function Home() {
                       search_off
                     </span>
                     <p className="text-[13px] text-stone-500 leading-relaxed">
-                      이 지역에는 아직 해당 메뉴를 잘하는 곳이 없네요.
+                      이 지역에는 아직 추천 조건에 맞는 곳이 없네요.
                       <br />필터를 초기화해 볼까요?
                     </p>
                     {selectedFilters.length > 0 && (
@@ -263,20 +438,18 @@ export default function Home() {
                     key={cafe.id}
                     onClick={() => setSelectedCafe(cafe)}
                     className={`bg-white p-4 rounded-xl border transition-colors cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)] ${
-                      recommendedCafeIds.has(cafe.id)
-                        ? "border-[#ac3509]/40 ring-1 ring-[#ac3509]/20"
-                        : "border-stone-200/60 hover:border-stone-300"
+                      cardRecommendationClasses(cafe.id)
                     }`}
                   >
                     <div className="flex items-center gap-1.5">
                       <p className="font-bold text-[15px] text-stone-800">{cafe.name}</p>
-                      {recommendedCafeIds.has(cafe.id) && (
+                      {recommendationTypes.has(cafe.id) && (
                         <span
-                          className="material-symbols-outlined text-[#ac3509] text-[15px]"
+                          className={`material-symbols-outlined text-[15px] ${recommendationIconClasses(cafe.id)}`}
                           style={{ fontVariationSettings: "'FILL' 1" }}
-                          title="선호 메뉴 보유"
+                          title="추천 카페"
                         >
-                          recommend
+                          {recommendationTypes.get(cafe.id) === "both" ? "auto_awesome" : "recommend"}
                         </span>
                       )}
                     </div>
@@ -296,7 +469,7 @@ export default function Home() {
             cafes={filteredCafes}
             onPinClick={setSelectedCafe}
             onCenterChanged={(lat, lng) => setCenter({ lat, lng })}
-            recommendedCafeIds={recommendedCafeIds}
+            recommendationTypes={recommendationTypes}
           />
         </div>
       </main>
@@ -308,6 +481,7 @@ export default function Home() {
           session={session}
           onClose={() => setSelectedCafe(null)}
           onOpenReview={handleOpenReview}
+          menuRecommendationTypes={menuRecommendationTypes}
         />
       )}
 
@@ -332,6 +506,14 @@ export default function Home() {
       {/* 온보딩 모달 — localStorage 미설정 시 표시 */}
       {hasInitialized === false && (
         <OnboardingModal onComplete={save} />
+      )}
+
+      {isTasteTestOpen && (
+        <CoffeeTasteTestModal
+          userId={session?.user.id ?? null}
+          onClose={() => setIsTasteTestOpen(false)}
+          onComplete={handleTasteTestComplete}
+        />
       )}
     </div>
   );

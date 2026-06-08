@@ -7,7 +7,7 @@ interface Props {
   cafes: Cafe[];
   onPinClick: (cafe: Cafe) => void;
   onCenterChanged: (lat: number, lng: number) => void;
-  recommendedCafeIds?: Set<string>;
+  recommendationTypes?: Map<string, "bayesian" | "personalized" | "both">;
 }
 
 declare global {
@@ -16,7 +16,18 @@ declare global {
   }
 }
 
-export default function KakaoMap({ cafes, onPinClick, onCenterChanged, recommendedCafeIds }: Props) {
+function markerImageFor(type: "bayesian" | "personalized" | "both") {
+  const color = type === "both" ? "#7c3aed" : type === "personalized" ? "#2563eb" : "#ac3509";
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="42" viewBox="0 0 32 42">
+      <path fill="${color}" d="M16 0C7.2 0 0 7.2 0 16c0 12 16 26 16 26s16-14 16-26C32 7.2 24.8 0 16 0Z"/>
+      <circle cx="16" cy="16" r="7" fill="white"/>
+    </svg>
+  `;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+export default function KakaoMap({ cafes, onPinClick, onCenterChanged, recommendationTypes }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
@@ -57,13 +68,12 @@ export default function KakaoMap({ cafes, onPinClick, onCenterChanged, recommend
 
     cafes.forEach((cafe) => {
       const position = new window.kakao.maps.LatLng(cafe.lat, cafe.lng);
-      const isRecommended = recommendedCafeIds?.has(cafe.id) ?? false;
+      const recommendationType = recommendationTypes?.get(cafe.id);
 
-      // 추천 카페는 강조 마커 (크기 키우고 빨간 계열 이미지)
       const markerOptions: any = { position };
-      if (isRecommended) {
-        const imageSrc = "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png";
-        const imageSize = new window.kakao.maps.Size(24, 35);
+      if (recommendationType) {
+        const imageSrc = markerImageFor(recommendationType);
+        const imageSize = new window.kakao.maps.Size(32, 42);
         markerOptions.image = new window.kakao.maps.MarkerImage(imageSrc, imageSize);
       }
 
@@ -76,7 +86,7 @@ export default function KakaoMap({ cafes, onPinClick, onCenterChanged, recommend
 
       markersRef.current.push(marker);
     });
-  }, [cafes, recommendedCafeIds]);
+  }, [cafes, recommendationTypes]);
 
   return <div ref={mapRef} style={{ width: "100%", height: "100%" }} />;
 }

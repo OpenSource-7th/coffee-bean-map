@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:recommendations": "node --experimental-strip-types --test src/lib/recommendations.test.mjs src/lib/coffeeTasteTest.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.3",

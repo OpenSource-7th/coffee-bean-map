@@ -14,5 +14,4 @@ class Settings(BaseSettings):
     ONNX_INTRA_OP_NUM_THREADS: int = 1
     ONNX_INTER_OP_NUM_THREADS: int = 1
 
-
 settings = Settings()

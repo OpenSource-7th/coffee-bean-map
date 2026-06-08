@@ -11,9 +11,10 @@ interface Props {
   session: Session | null;
   onClose: () => void;
   onOpenReview: () => void;
+  menuRecommendationTypes?: Map<string, "bayesian" | "personalized" | "both">;
 }
 
-export default function CafeDetailModal({ cafe, session, onClose, onOpenReview }: Props) {
+export default function CafeDetailModal({ cafe, session, onClose, onOpenReview, menuRecommendationTypes }: Props) {
   const { isBookmarked, toggleBookmark } = useBookmarks();
   const { menus, isLoading: menusLoading } = useMenus(cafe.id);
   const { menuScores } = useMenuScores(cafe.id);
@@ -66,32 +67,56 @@ export default function CafeDetailModal({ cafe, session, onClose, onOpenReview }
             <ul className="flex flex-col gap-1.5">
               {menus.map((menu) => {
                 const score = scoreByMenuId.get(menu.id);
+                const recommendationType = menuRecommendationTypes?.get(menu.id);
                 const isSignature = score?.is_signature ?? false;
                 const bayesian = score?.bayesian_score;
+                const isBoth = recommendationType === "both";
+                const isPersonalized = recommendationType === "personalized";
+                const isBayesian = recommendationType === "bayesian";
 
                 return (
                   <li
                     key={menu.id}
                     className={`flex items-center justify-between rounded-xl px-3 py-2 ${
-                      isSignature ? "bg-amber-50 border border-amber-200" : "bg-stone-50"
+                      isBoth
+                        ? "bg-purple-50 border border-purple-200"
+                        : isPersonalized
+                          ? "bg-blue-50 border border-blue-200"
+                          : isBayesian || isSignature
+                            ? "bg-amber-50 border border-amber-200"
+                            : "bg-stone-50"
                     }`}
                   >
                     <div className="flex items-center gap-1.5">
-                      {isSignature && (
+                      {(isBoth || isPersonalized || isBayesian || isSignature) && (
                         <span
-                          className="material-symbols-outlined text-[16px] text-amber-500"
+                          className={`material-symbols-outlined text-[16px] ${
+                            isBoth ? "text-purple-500" : isPersonalized ? "text-blue-500" : "text-amber-500"
+                          }`}
                           style={{ fontVariationSettings: "'FILL' 1" }}
-                          title="시그니처 메뉴"
+                          title={isBoth ? "통합 추천 메뉴" : isPersonalized ? "사용자 맞춤 추천 메뉴" : "Bayesian 추천 메뉴"}
                         >
-                          workspace_premium
+                          {isBoth ? "auto_awesome" : isPersonalized ? "favorite" : "workspace_premium"}
                         </span>
                       )}
                       <span className="text-[14px] text-stone-800 font-medium">
                         {menu.menu_name}
                       </span>
                     </div>
-                    {bayesian != null && (
-                      <span className="text-[11px] text-stone-400 font-mono tabular-nums">
+                    {isBoth && (
+                      <span className="text-[11px] text-purple-700 font-semibold whitespace-nowrap">
+                        {bayesian != null && `${(bayesian * 100).toFixed(0)}점 · `}당신에게 알맞는 커피!
+                      </span>
+                    )}
+                    {isPersonalized && (
+                      <span className="text-[11px] text-blue-700 font-semibold whitespace-nowrap">
+                        다른 사용자분들이 좋아해요
+                      </span>
+                    )}
+                    {!isBoth && !isPersonalized && bayesian != null && (
+                      <span className={`text-[11px] font-mono tabular-nums ${
+                        isBayesian || isSignature ? "text-amber-700" : "text-stone-400"
+                      }`}>
                         {(bayesian * 100).toFixed(0)}점
                       </span>
                     )}
