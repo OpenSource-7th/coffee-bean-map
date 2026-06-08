@@ -27,6 +27,10 @@ const PERSONALIZED_FILTER = "사용자 맞춤 추천";
 const DEFAULT_RADIUS_METERS = 1000;
 const MAX_FILTER_RADIUS_METERS = 10000;
 
+function menuOverlapKey(cafeId: string, menuName: string): string {
+  return `${cafeId}:${menuName.trim().toLocaleLowerCase("ko-KR")}`;
+}
+
 export default function Home() {
   const [center, setCenter] = useState({ lat: 37.5665, lng: 126.9780 });
   const [radiusMeters, setRadiusMeters] = useState(DEFAULT_RADIUS_METERS);
@@ -108,6 +112,14 @@ export default function Home() {
     [personalizedRecommendations]
   );
 
+  const personalizedMenuKeys = useMemo(() => {
+    const keys = new Set<string>();
+    personalizedRecommendations.forEach((rec) => {
+      if (rec.menu_name) keys.add(menuOverlapKey(rec.cafe_id, rec.menu_name));
+    });
+    return keys;
+  }, [personalizedRecommendations]);
+
   const bayesianRecommendedMenuIds = useMemo(() => {
     if (selectedStandardFilters.length === 0) return new Set<string>();
 
@@ -150,8 +162,20 @@ export default function Home() {
       const rec = personalizedRecommendationByMenuId.get(menuId);
       if (rec) ids.add(rec.cafe_id);
     });
+
+    cafeMenuItemsMap.forEach((menus, cafeId) => {
+      menus.forEach((menu) => {
+        if (
+          selectedStandardFilters.includes(menu.menu_name)
+          && personalizedMenuKeys.has(menuOverlapKey(cafeId, menu.menu_name))
+        ) {
+          ids.add(cafeId);
+        }
+      });
+    });
+
     return ids;
-  }, [bayesianRecommendedMenuIds, personalizedRecommendationByMenuId]);
+  }, [bayesianRecommendedMenuIds, personalizedRecommendationByMenuId, cafeMenuItemsMap, selectedStandardFilters, personalizedMenuKeys]);
 
   const filteredCafes = useMemo(() => {
     if (selectedFilters.length === 0) return cafesForRecommendation;
@@ -232,9 +256,27 @@ export default function Home() {
       personalizedRecommendationByMenuId.forEach((_rec, id) => {
         map.set(id, map.has(id) ? "bothMenu" : "personalized");
       });
+
+      cafeMenuItemsMap.forEach((menus, cafeId) => {
+        menus.forEach((menu) => {
+          if (
+            selectedStandardFilters.includes(menu.menu_name)
+            && personalizedMenuKeys.has(menuOverlapKey(cafeId, menu.menu_name))
+          ) {
+            map.set(menu.id, "bothMenu");
+          }
+        });
+      });
     }
     return map;
-  }, [bayesianRecommendedMenuIds, personalizedRecommendationByMenuId, isPersonalizedFilterActive]);
+  }, [
+    bayesianRecommendedMenuIds,
+    personalizedRecommendationByMenuId,
+    isPersonalizedFilterActive,
+    cafeMenuItemsMap,
+    selectedStandardFilters,
+    personalizedMenuKeys,
+  ]);
 
   function cardRecommendationClasses(cafeId: string): string {
     const type = recommendationTypes.get(cafeId);
@@ -333,18 +375,18 @@ export default function Home() {
     setSearchMessage(null);
     const localMatches = cafes.filter(cafe => cafe.name.toLocaleLowerCase("ko-KR").includes(query.toLocaleLowerCase("ko-KR")));
 
-    const { data, error } = await supabase.rpc("search_cafes_by_name", {
+    const { data } = await supabase.rpc("search_cafes_by_name", {
       search_text: query,
       limit_count: 20,
     });
 
-    if (!error && data && data.length > 0) {
+    if (data && data.length > 0) {
       const results = data as Cafe[];
       setCafeSearchResults(results);
       setCenter({ lat: results[0].lat, lng: results[0].lng });
       setRadiusMeters(DEFAULT_RADIUS_METERS);
       setSelectedCafe(results[0]);
-      setSearchMessage(`'${results[0].name}' 주변으로 이동했습니다.`);
+      setSearchMessage("현재 위치에서 카페를 탐색합니다");
       return;
     }
 
@@ -352,16 +394,12 @@ export default function Home() {
       setCafeSearchResults(localMatches);
       setCenter({ lat: localMatches[0].lat, lng: localMatches[0].lng });
       setSelectedCafe(localMatches[0]);
-      setSearchMessage(
-        error
-          ? "전체 카페명 검색 RPC가 아직 준비되지 않아 현재 지도 범위에서 찾았습니다."
-          : `'${localMatches[0].name}' 주변으로 이동했습니다.`
-      );
+      setSearchMessage("현재 위치에서 카페를 탐색합니다");
       return;
     }
 
     setCafeSearchResults([]);
-    setSearchMessage(error ? "전체 카페명 검색 RPC가 아직 준비되지 않았고, 현재 지도 범위에도 결과가 없습니다." : "검색한 카페를 찾지 못했습니다.");
+    setSearchMessage("근처에서 해당 카페를 찾지 못하였습니다. 지역명을 통해 최대한 근처에서 진행해주세요.");
   }
 
   return (
