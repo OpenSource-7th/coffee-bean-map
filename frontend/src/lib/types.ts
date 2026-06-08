@@ -7,6 +7,8 @@ export interface Cafe {
   created_at: string
 }
 
+export type RecommendationType = 'bayesian' | 'personalized' | 'bothCafe' | 'bothMenu'
+
 export interface MapCenter {
   lat: number
   lng: number

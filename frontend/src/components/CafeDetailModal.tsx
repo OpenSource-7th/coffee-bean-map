@@ -1,7 +1,7 @@
 "use client";
 
 import { Session } from "@supabase/supabase-js";
-import { Cafe } from "@/lib/types";
+import { Cafe, RecommendationType } from "@/lib/types";
 import { useBookmarks } from "@/hooks/useBookmarks";
 import { useMenus } from "@/hooks/useMenus";
 import { useMenuScores } from "@/hooks/useMenuScores";
@@ -11,7 +11,7 @@ interface Props {
   session: Session | null;
   onClose: () => void;
   onOpenReview: () => void;
-  menuRecommendationTypes?: Map<string, "bayesian" | "personalized" | "both">;
+  menuRecommendationTypes?: Map<string, RecommendationType>;
 }
 
 export default function CafeDetailModal({ cafe, session, onClose, onOpenReview, menuRecommendationTypes }: Props) {
@@ -70,7 +70,7 @@ export default function CafeDetailModal({ cafe, session, onClose, onOpenReview, 
                 const recommendationType = menuRecommendationTypes?.get(menu.id);
                 const isSignature = score?.is_signature ?? false;
                 const bayesian = score?.bayesian_score;
-                const isBoth = recommendationType === "both";
+                const isBothMenu = recommendationType === "bothMenu";
                 const isPersonalized = recommendationType === "personalized";
                 const isBayesian = recommendationType === "bayesian";
 
@@ -78,8 +78,8 @@ export default function CafeDetailModal({ cafe, session, onClose, onOpenReview, 
                   <li
                     key={menu.id}
                     className={`flex items-center justify-between rounded-xl px-3 py-2 ${
-                      isBoth
-                        ? "bg-purple-50 border border-purple-200"
+                      isBothMenu
+                        ? "bg-yellow-50 border border-yellow-300"
                         : isPersonalized
                           ? "bg-blue-50 border border-blue-200"
                           : isBayesian || isSignature
@@ -88,23 +88,23 @@ export default function CafeDetailModal({ cafe, session, onClose, onOpenReview, 
                     }`}
                   >
                     <div className="flex items-center gap-1.5">
-                      {(isBoth || isPersonalized || isBayesian || isSignature) && (
+                      {(isBothMenu || isPersonalized || isBayesian || isSignature) && (
                         <span
                           className={`material-symbols-outlined text-[16px] ${
-                            isBoth ? "text-purple-500" : isPersonalized ? "text-blue-500" : "text-amber-500"
+                            isBothMenu ? "text-yellow-600" : isPersonalized ? "text-blue-500" : "text-amber-500"
                           }`}
                           style={{ fontVariationSettings: "'FILL' 1" }}
-                          title={isBoth ? "통합 추천 메뉴" : isPersonalized ? "사용자 맞춤 추천 메뉴" : "Bayesian 추천 메뉴"}
+                          title={isBothMenu ? "두 추천이 함께 고른 메뉴" : isPersonalized ? "사용자 맞춤 추천 메뉴" : "Bayesian 추천 메뉴"}
                         >
-                          {isBoth ? "auto_awesome" : isPersonalized ? "favorite" : "workspace_premium"}
+                          {isBothMenu ? "auto_awesome" : isPersonalized ? "favorite" : "workspace_premium"}
                         </span>
                       )}
                       <span className="text-[14px] text-stone-800 font-medium">
                         {menu.menu_name}
                       </span>
                     </div>
-                    {isBoth && (
-                      <span className="text-[11px] text-purple-700 font-semibold whitespace-nowrap">
+                    {isBothMenu && (
+                      <span className="text-[11px] text-yellow-700 font-semibold whitespace-nowrap">
                         {bayesian != null && `${(bayesian * 100).toFixed(0)}점 · `}당신에게 알맞는 커피!
                       </span>
                     )}
@@ -113,7 +113,7 @@ export default function CafeDetailModal({ cafe, session, onClose, onOpenReview, 
                         다른 사용자분들이 좋아해요
                       </span>
                     )}
-                    {!isBoth && !isPersonalized && bayesian != null && (
+                    {!isBothMenu && !isPersonalized && bayesian != null && (
                       <span className={`text-[11px] font-mono tabular-nums ${
                         isBayesian || isSignature ? "text-amber-700" : "text-stone-400"
                       }`}>

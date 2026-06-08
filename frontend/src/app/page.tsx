@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, type FormEvent } from "react";
 import KakaoMap from "@/components/KakaoMap";
 import AuthModal from "@/components/AuthModal";
 import ReviewForm from "@/components/ReviewForm";
@@ -16,16 +16,20 @@ import { useSubmitReview } from "@/hooks/useSubmitReview";
 import { usePreferredMenus } from "@/hooks/usePreferredMenus";
 import { useAllCafeMenuScores } from "@/hooks/useAllCafeMenuScores";
 import { useRecommendations } from "@/hooks/useRecommendations";
-import { Cafe } from "@/lib/types";
+import { supabase } from "@/lib/supabase";
+import { Cafe, RecommendationType } from "@/lib/types";
 import {
   loadCoffeeTasteTestResult,
   type CoffeeTasteTestResult,
 } from "@/lib/coffeeTasteTest";
 
 const PERSONALIZED_FILTER = "사용자 맞춤 추천";
+const DEFAULT_RADIUS_METERS = 1000;
+const MAX_FILTER_RADIUS_METERS = 10000;
 
 export default function Home() {
   const [center, setCenter] = useState({ lat: 37.5665, lng: 126.9780 });
+  const [radiusMeters, setRadiusMeters] = useState(DEFAULT_RADIUS_METERS);
   const [selectedCafe, setSelectedCafe] = useState<Cafe | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isReviewFormOpen, setIsReviewFormOpen] = useState(false);
@@ -33,8 +37,14 @@ export default function Home() {
   const [isTasteTestOpen, setIsTasteTestOpen] = useState(false);
   const [tasteTestResult, setTasteTestResult] = useState<CoffeeTasteTestResult | null>(null);
   const [sidebarTab, setSidebarTab] = useState<"list" | "myreviews">("list");
+  const [locationQuery, setLocationQuery] = useState("");
+  const [cafeNameQuery, setCafeNameQuery] = useState("");
+  const [cafeSearchResults, setCafeSearchResults] = useState<Cafe[]>([]);
+  const [searchMessage, setSearchMessage] = useState<string | null>(null);
+  const [hasExpandedFilterSearch, setHasExpandedFilterSearch] = useState(false);
+  const [visibleCafeIds, setVisibleCafeIds] = useState<Set<string>>(new Set());
 
-  const { cafes, isLoading: cafesLoading } = useCafes({ center, radiusMeters: 1000 });
+  const { cafes, isLoading: cafesLoading } = useCafes({ center, radiusMeters });
   const { session, isLoading: authLoading, signOut } = useAuth();
   const { selectedFilters, toggleFilter, clearFilters } = useFilter();
   const { pendingReviews, retryPending, dismissPending } = useSubmitReview();
@@ -44,7 +54,24 @@ export default function Home() {
     setTasteTestResult(loadCoffeeTasteTestResult());
   }, []);
 
-  const cafeIds = useMemo(() => cafes.map(c => c.id), [cafes]);
+  const selectedFilterKey = useMemo(
+    () => [...selectedFilters].sort().join("|"),
+    [selectedFilters]
+  );
+
+  const cafesForRecommendation = useMemo(() => {
+    const map = new Map<string, Cafe>();
+    cafes.forEach(cafe => map.set(cafe.id, cafe));
+    cafeSearchResults.forEach(cafe => map.set(cafe.id, cafe));
+
+    const merged = Array.from(map.values());
+    const query = cafeNameQuery.trim().toLocaleLowerCase("ko-KR");
+    if (!query) return merged;
+
+    return merged.filter(cafe => cafe.name.toLocaleLowerCase("ko-KR").includes(query));
+  }, [cafes, cafeSearchResults, cafeNameQuery]);
+
+  const cafeIds = useMemo(() => cafesForRecommendation.map(c => c.id), [cafesForRecommendation]);
   const { cafeMenuMap, cafeMenuItemsMap } = useCafeMenus(cafeIds);
   const { menuScores } = useAllCafeMenuScores(cafeIds);
   const selectedStandardFilters = useMemo(
@@ -97,7 +124,7 @@ export default function Home() {
     const map = new Map<string, number>();
     if (selectedStandardFilters.length === 0) return map;
 
-    cafes.forEach((cafe) => {
+    cafesForRecommendation.forEach((cafe) => {
       const matchingMenus = (cafeMenuItemsMap.get(cafe.id) ?? []).filter(menu =>
         selectedStandardFilters.includes(menu.menu_name)
       );
@@ -110,23 +137,32 @@ export default function Home() {
     });
 
     return map;
-  }, [cafes, cafeMenuItemsMap, menuScoreByMenuId, selectedStandardFilters]);
+  }, [cafesForRecommendation, cafeMenuItemsMap, menuScoreByMenuId, selectedStandardFilters]);
 
   const bayesianCafeIds = useMemo(
     () => new Set(bayesianCafeScoreMap.keys()),
     [bayesianCafeScoreMap]
   );
 
-  const filteredCafes = useMemo(() => {
-    if (selectedFilters.length === 0) return cafes;
+  const overlappingMenuCafeIds = useMemo(() => {
+    const ids = new Set<string>();
+    bayesianRecommendedMenuIds.forEach((menuId) => {
+      const rec = personalizedRecommendationByMenuId.get(menuId);
+      if (rec) ids.add(rec.cafe_id);
+    });
+    return ids;
+  }, [bayesianRecommendedMenuIds, personalizedRecommendationByMenuId]);
 
-    return cafes.filter(cafe => {
+  const filteredCafes = useMemo(() => {
+    if (selectedFilters.length === 0) return cafesForRecommendation;
+
+    return cafesForRecommendation.filter(cafe => {
       const menus = cafeMenuMap.get(cafe.id) ?? [];
       const matchesBayesian = selectedStandardFilters.some(filter => menus.some(m => m === filter));
       const matchesPersonalized = isPersonalizedFilterActive && personalizedCafeIds.has(cafe.id);
       return matchesBayesian || matchesPersonalized;
     });
-  }, [cafes, selectedFilters.length, cafeMenuMap, selectedStandardFilters, isPersonalizedFilterActive, personalizedCafeIds]);
+  }, [cafesForRecommendation, selectedFilters.length, cafeMenuMap, selectedStandardFilters, isPersonalizedFilterActive, personalizedCafeIds]);
 
   // 일반 메뉴 태그는 Bayesian 점수, 사용자 맞춤 태그는 취향 벡터 추천 점수로 정렬
   const rankedCafes = useMemo(() => {
@@ -174,22 +210,27 @@ export default function Home() {
   ]);
 
   const recommendationTypes = useMemo(() => {
-    const map = new Map<string, "bayesian" | "personalized" | "both">();
+    const map = new Map<string, RecommendationType>();
     bayesianCafeIds.forEach(id => map.set(id, "bayesian"));
     if (isPersonalizedFilterActive) {
       personalizedCafeIds.forEach(id => {
-        map.set(id, map.has(id) ? "both" : "personalized");
+        map.set(id, map.has(id) ? "bothCafe" : "personalized");
+      });
+      overlappingMenuCafeIds.forEach(id => {
+        if (bayesianCafeIds.has(id) && personalizedCafeIds.has(id)) {
+          map.set(id, "bothMenu");
+        }
       });
     }
     return map;
-  }, [bayesianCafeIds, personalizedCafeIds, isPersonalizedFilterActive]);
+  }, [bayesianCafeIds, personalizedCafeIds, overlappingMenuCafeIds, isPersonalizedFilterActive]);
 
   const menuRecommendationTypes = useMemo(() => {
-    const map = new Map<string, "bayesian" | "personalized" | "both">();
+    const map = new Map<string, RecommendationType>();
     bayesianRecommendedMenuIds.forEach(id => map.set(id, "bayesian"));
     if (isPersonalizedFilterActive) {
       personalizedRecommendationByMenuId.forEach((_rec, id) => {
-        map.set(id, map.has(id) ? "both" : "personalized");
+        map.set(id, map.has(id) ? "bothMenu" : "personalized");
       });
     }
     return map;
@@ -197,7 +238,8 @@ export default function Home() {
 
   function cardRecommendationClasses(cafeId: string): string {
     const type = recommendationTypes.get(cafeId);
-    if (type === "both") return "border-purple-400/60 ring-1 ring-purple-300/50";
+    if (type === "bothMenu") return "border-yellow-400/70 ring-1 ring-yellow-300/60";
+    if (type === "bothCafe") return "border-purple-400/60 ring-1 ring-purple-300/50";
     if (type === "personalized") return "border-blue-400/60 ring-1 ring-blue-300/40";
     if (type === "bayesian") return "border-[#ac3509]/40 ring-1 ring-[#ac3509]/20";
     return "border-stone-200/60 hover:border-stone-300";
@@ -205,9 +247,21 @@ export default function Home() {
 
   function recommendationIconClasses(cafeId: string): string {
     const type = recommendationTypes.get(cafeId);
-    if (type === "both") return "text-purple-600";
+    if (type === "bothMenu") return "text-yellow-600";
+    if (type === "bothCafe") return "text-purple-600";
     if (type === "personalized") return "text-blue-600";
     return "text-[#ac3509]";
+  }
+
+  function handleCafeCardClick(cafe: Cafe) {
+    if (visibleCafeIds.has(cafe.id)) {
+      setSelectedCafe(cafe);
+      return;
+    }
+
+    setCenter({ lat: cafe.lat, lng: cafe.lng });
+    setRadiusMeters(DEFAULT_RADIUS_METERS);
+    setSearchMessage(`'${cafe.name}' 위치로 이동했습니다. 카페 카드를 한 번 더 누르면 메뉴를 볼 수 있습니다.`);
   }
 
   function handleOpenReview() {
@@ -224,6 +278,90 @@ export default function Home() {
     if (!selectedFilters.includes(PERSONALIZED_FILTER)) {
       toggleFilter(PERSONALIZED_FILTER);
     }
+  }
+
+  useEffect(() => {
+    setRadiusMeters(DEFAULT_RADIUS_METERS);
+    setHasExpandedFilterSearch(false);
+  }, [center.lat, center.lng, selectedFilterKey]);
+
+  useEffect(() => {
+    if (cafesLoading || selectedFilters.length === 0 || filteredCafes.length > 0) return;
+    if (radiusMeters >= MAX_FILTER_RADIUS_METERS) return;
+
+    setHasExpandedFilterSearch(true);
+    setRadiusMeters(prev => Math.min(prev === DEFAULT_RADIUS_METERS ? 3000 : prev * 2, MAX_FILTER_RADIUS_METERS));
+  }, [cafesLoading, selectedFilters.length, filteredCafes.length, radiusMeters]);
+
+  function handleLocationSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const query = locationQuery.trim();
+    if (!query) return;
+
+    const services = window.kakao?.maps?.services;
+    if (!services?.Places) {
+      setSearchMessage("지도 검색 기능을 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
+      return;
+    }
+
+    setSearchMessage(null);
+    const places = new services.Places();
+    places.keywordSearch(query, (data: any[], status: string) => {
+      if (status !== services.Status.OK || data.length === 0) {
+        setSearchMessage("검색한 위치를 찾지 못했습니다.");
+        return;
+      }
+
+      const place = data[0];
+      setCenter({ lat: Number(place.y), lng: Number(place.x) });
+      setRadiusMeters(DEFAULT_RADIUS_METERS);
+      setSearchMessage(`'${place.place_name ?? query}' 근처로 이동했습니다.`);
+    });
+  }
+
+  async function handleCafeNameSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const query = cafeNameQuery.trim();
+    if (!query) {
+      setCafeSearchResults([]);
+      setSearchMessage(null);
+      return;
+    }
+
+    setSearchMessage(null);
+    const localMatches = cafes.filter(cafe => cafe.name.toLocaleLowerCase("ko-KR").includes(query.toLocaleLowerCase("ko-KR")));
+
+    const { data, error } = await supabase.rpc("search_cafes_by_name", {
+      search_text: query,
+      limit_count: 20,
+    });
+
+    if (!error && data && data.length > 0) {
+      const results = data as Cafe[];
+      setCafeSearchResults(results);
+      setCenter({ lat: results[0].lat, lng: results[0].lng });
+      setRadiusMeters(DEFAULT_RADIUS_METERS);
+      setSelectedCafe(results[0]);
+      setSearchMessage(`'${results[0].name}' 주변으로 이동했습니다.`);
+      return;
+    }
+
+    if (localMatches.length > 0) {
+      setCafeSearchResults(localMatches);
+      setCenter({ lat: localMatches[0].lat, lng: localMatches[0].lng });
+      setSelectedCafe(localMatches[0]);
+      setSearchMessage(
+        error
+          ? "전체 카페명 검색 RPC가 아직 준비되지 않아 현재 지도 범위에서 찾았습니다."
+          : `'${localMatches[0].name}' 주변으로 이동했습니다.`
+      );
+      return;
+    }
+
+    setCafeSearchResults([]);
+    setSearchMessage(error ? "전체 카페명 검색 RPC가 아직 준비되지 않았고, 현재 지도 범위에도 결과가 없습니다." : "검색한 카페를 찾지 못했습니다.");
   }
 
   return (
@@ -343,8 +481,48 @@ export default function Home() {
       <main className="flex flex-1 overflow-hidden">
         {/* 사이드바 */}
         <aside className="w-72 flex flex-col border-r border-stone-200 bg-[#fbf9f9] overflow-hidden">
+          {/* 검색 */}
+          <div className="px-4 pt-4 pb-2 shrink-0 space-y-2">
+            <form onSubmit={handleLocationSearch} className="flex gap-2">
+              <input
+                value={locationQuery}
+                onChange={(event) => setLocationQuery(event.target.value)}
+                placeholder="원하는 위치 검색"
+                className="min-w-0 flex-1 rounded-lg border border-stone-200 bg-white px-3 py-2 text-[12px] outline-none focus:border-[#ac3509]"
+              />
+              <button
+                type="submit"
+                className="px-3 py-2 rounded-lg bg-[#271310] text-white text-[12px] font-semibold hover:bg-[#3a201b] transition-colors"
+              >
+                이동
+              </button>
+            </form>
+
+            <form onSubmit={handleCafeNameSearch} className="flex gap-2">
+              <input
+                value={cafeNameQuery}
+                onChange={(event) => {
+                  setCafeNameQuery(event.target.value);
+                  if (!event.target.value.trim()) setCafeSearchResults([]);
+                }}
+                placeholder="카페 이름 검색"
+                className="min-w-0 flex-1 rounded-lg border border-stone-200 bg-white px-3 py-2 text-[12px] outline-none focus:border-[#ac3509]"
+              />
+              <button
+                type="submit"
+                className="px-3 py-2 rounded-lg border border-stone-300 bg-white text-stone-700 text-[12px] font-semibold hover:bg-stone-50 transition-colors"
+              >
+                검색
+              </button>
+            </form>
+
+            {searchMessage && (
+              <p className="text-[11px] text-stone-500 leading-relaxed">{searchMessage}</p>
+            )}
+          </div>
+
           {/* 필터 칩 */}
-          <div className="px-4 pt-4 pb-2 shrink-0">
+          <div className="px-4 pt-2 pb-2 shrink-0">
             <div className="flex gap-1.5 flex-wrap">
               {availableMenuFilters.map(filter => {
                 const active = selectedFilters.includes(filter);
@@ -420,7 +598,9 @@ export default function Home() {
                       search_off
                     </span>
                     <p className="text-[13px] text-stone-500 leading-relaxed">
-                      이 지역에는 아직 추천 조건에 맞는 곳이 없네요.
+                      {hasExpandedFilterSearch
+                        ? `${Math.round(radiusMeters / 1000)}km까지 찾아봤지만 추천 조건에 맞는 곳이 없네요.`
+                        : "이 지역에는 아직 추천 조건에 맞는 곳이 없네요."}
                       <br />필터를 초기화해 볼까요?
                     </p>
                     {selectedFilters.length > 0 && (
@@ -436,7 +616,7 @@ export default function Home() {
                 {rankedCafes.map((cafe) => (
                   <div
                     key={cafe.id}
-                    onClick={() => setSelectedCafe(cafe)}
+                    onClick={() => handleCafeCardClick(cafe)}
                     className={`bg-white p-4 rounded-xl border transition-colors cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)] ${
                       cardRecommendationClasses(cafe.id)
                     }`}
@@ -449,7 +629,7 @@ export default function Home() {
                           style={{ fontVariationSettings: "'FILL' 1" }}
                           title="추천 카페"
                         >
-                          {recommendationTypes.get(cafe.id) === "both" ? "auto_awesome" : "recommend"}
+                          {recommendationTypes.get(cafe.id)?.startsWith("both") ? "auto_awesome" : "recommend"}
                         </span>
                       )}
                     </div>
@@ -467,8 +647,10 @@ export default function Home() {
         <div className="flex-1 relative">
           <KakaoMap
             cafes={filteredCafes}
+            center={center}
             onPinClick={setSelectedCafe}
             onCenterChanged={(lat, lng) => setCenter({ lat, lng })}
+            onVisibleCafeIdsChanged={(ids) => setVisibleCafeIds(new Set(ids))}
             recommendationTypes={recommendationTypes}
           />
         </div>

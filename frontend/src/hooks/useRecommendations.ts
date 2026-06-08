@@ -10,6 +10,7 @@ import {
   type TasteVector,
   type UserPreference,
 } from '@/lib/recommendations'
+import { buildMenuTasteVectorsFromReviews } from '@/lib/reviewTasteVector'
 
 interface UseRecommendationsParams {
   userId: string | null
@@ -74,6 +75,7 @@ interface RawReview {
   user_id: string
   cafe_id: string
   menu_id: string | null
+  review_text: string | null
   sentiment: 'positive' | 'neutral' | 'negative' | null
   confidence_score: number | null
 }
@@ -242,7 +244,7 @@ export function useRecommendations({
           .select('cafe_id, menu_id, positive_count, neutral_count, negative_count, bayesian_score, weighted_score'),
         supabase
           .from('reviews')
-          .select('user_id, cafe_id, menu_id, sentiment, confidence_score')
+          .select('user_id, cafe_id, menu_id, review_text, sentiment, confidence_score')
           .not('menu_id', 'is', null)
           .not('sentiment', 'is', null),
       ]) as [
@@ -277,6 +279,18 @@ export function useRecommendations({
       const menuScoresById = new Map(
         ((menuScoresResult.data ?? []) as RawMenuScore[]).map((score) => [score.menu_id, score])
       )
+      const rawReviews = (reviewsResult.data ?? []) as RawReview[]
+      const reviewTasteVectorByMenuId = buildMenuTasteVectorsFromReviews(
+        rawReviews
+          .filter((review): review is RawReview & { menu_id: string; review_text: string } =>
+            review.menu_id !== null && typeof review.review_text === 'string'
+          )
+          .map((review) => ({
+            menuId: review.menu_id,
+            reviewText: review.review_text,
+            sentiment: review.sentiment,
+          }))
+      )
 
       const itemByMenuId = new Map<string, RecommendationItem>()
 
@@ -303,6 +317,7 @@ export function useRecommendations({
         if (itemByMenuId.has(menu.id)) return
 
         const score = menuScoresById.get(menu.id)
+        const reviewTasteVector = reviewTasteVectorByMenuId.get(menu.id)
         const reviewCount =
           (score?.positive_count ?? 0) + (score?.neutral_count ?? 0) + (score?.negative_count ?? 0)
 
@@ -311,7 +326,7 @@ export function useRecommendations({
           menuId: menu.id,
           cafeName: cafeNameFromMenu(menu),
           menuName: menu.menu_name,
-          tasteVector: inferTasteVectorFromMenuName(menu.menu_name),
+          tasteVector: reviewTasteVector ?? inferTasteVectorFromMenuName(menu.menu_name),
           sentimentScore: score?.bayesian_score ?? score?.weighted_score ?? null,
           reviewCount,
         })
@@ -326,7 +341,7 @@ export function useRecommendations({
         })
       )
 
-      const reviews: RecommendationReview[] = ((reviewsResult.data ?? []) as RawReview[])
+      const reviews: RecommendationReview[] = rawReviews
         .filter((review): review is RawReview & { menu_id: string } => review.menu_id !== null)
         .map((review) => ({
           userId: review.user_id,

@@ -21,7 +21,7 @@ export default function RootLayout({
         />
         <script
           type="text/javascript"
-          src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=87bcf88e80396b15f799f571a3982a2b"
+          src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=87bcf88e80396b15f799f571a3982a2b&libraries=services"
         />
       </head>
       <body>

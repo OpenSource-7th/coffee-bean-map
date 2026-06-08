@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Cafe } from "@/lib/types";
+import { Cafe, MapCenter, RecommendationType } from "@/lib/types";
 
 interface Props {
   cafes: Cafe[];
+  center: MapCenter;
   onPinClick: (cafe: Cafe) => void;
   onCenterChanged: (lat: number, lng: number) => void;
-  recommendationTypes?: Map<string, "bayesian" | "personalized" | "both">;
+  onVisibleCafeIdsChanged?: (ids: string[]) => void;
+  recommendationTypes?: Map<string, RecommendationType>;
 }
 
 declare global {
@@ -16,8 +18,11 @@ declare global {
   }
 }
 
-function markerImageFor(type: "bayesian" | "personalized" | "both") {
-  const color = type === "both" ? "#7c3aed" : type === "personalized" ? "#2563eb" : "#ac3509";
+function markerImageFor(type: RecommendationType) {
+  const color =
+    type === "bothMenu" ? "#d97706" :
+      type === "bothCafe" ? "#7c3aed" :
+        type === "personalized" ? "#2563eb" : "#ac3509";
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="42" viewBox="0 0 32 42">
       <path fill="${color}" d="M16 0C7.2 0 0 7.2 0 16c0 12 16 26 16 26s16-14 16-26C32 7.2 24.8 0 16 0Z"/>
@@ -27,10 +32,38 @@ function markerImageFor(type: "bayesian" | "personalized" | "both") {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
-export default function KakaoMap({ cafes, onPinClick, onCenterChanged, recommendationTypes }: Props) {
+export default function KakaoMap({
+  cafes,
+  center,
+  onPinClick,
+  onCenterChanged,
+  onVisibleCafeIdsChanged,
+  recommendationTypes,
+}: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
+  const cafesRef = useRef<Cafe[]>(cafes);
+  const onVisibleCafeIdsChangedRef = useRef(onVisibleCafeIdsChanged);
+
+  useEffect(() => {
+    cafesRef.current = cafes;
+  }, [cafes]);
+
+  useEffect(() => {
+    onVisibleCafeIdsChangedRef.current = onVisibleCafeIdsChanged;
+  }, [onVisibleCafeIdsChanged]);
+
+  function emitVisibleCafeIds(map: any) {
+    const callback = onVisibleCafeIdsChangedRef.current;
+    if (!callback || !window.kakao?.maps) return;
+
+    const bounds = map.getBounds();
+    const ids = cafesRef.current
+      .filter((cafe) => bounds.contain(new window.kakao.maps.LatLng(cafe.lat, cafe.lng)))
+      .map((cafe) => cafe.id);
+    callback(ids);
+  }
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -47,6 +80,12 @@ export default function KakaoMap({ cafes, onPinClick, onCenterChanged, recommend
         const center = map.getCenter();
         onCenterChanged(center.getLat(), center.getLng());
       });
+
+      window.kakao.maps.event.addListener(map, "idle", () => {
+        emitVisibleCafeIds(map);
+      });
+
+      emitVisibleCafeIds(map);
     };
 
     const checkKakao = () => {
@@ -59,6 +98,13 @@ export default function KakaoMap({ cafes, onPinClick, onCenterChanged, recommend
 
     checkKakao();
   }, []);
+
+  useEffect(() => {
+    if (!mapInstanceRef.current || !window.kakao?.maps) return;
+
+    mapInstanceRef.current.setCenter(new window.kakao.maps.LatLng(center.lat, center.lng));
+    emitVisibleCafeIds(mapInstanceRef.current);
+  }, [center.lat, center.lng]);
 
   useEffect(() => {
     if (!mapInstanceRef.current || !window.kakao?.maps) return;
@@ -86,6 +132,8 @@ export default function KakaoMap({ cafes, onPinClick, onCenterChanged, recommend
 
       markersRef.current.push(marker);
     });
+
+    emitVisibleCafeIds(mapInstanceRef.current);
   }, [cafes, recommendationTypes]);
 
   return <div ref={mapRef} style={{ width: "100%", height: "100%" }} />;
