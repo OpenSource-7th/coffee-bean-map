@@ -16,7 +16,7 @@ const userVector = normalizeTasteVector({
   nutty: 0.7,
   body: 0.5,
   aroma: 0.8,
-  decaf: 0,
+  milk: 0.1,
 })
 
 test('cosineSimilarity returns higher score for a close taste vector', () => {
@@ -27,7 +27,7 @@ test('cosineSimilarity returns higher score for a close taste vector', () => {
     nutty: 0.72,
     body: 0.52,
     aroma: 0.82,
-    decaf: 0,
+    milk: 0.12,
   })
   const distantVector = normalizeTasteVector({
     acidity: 0.1,
@@ -36,7 +36,7 @@ test('cosineSimilarity returns higher score for a close taste vector', () => {
     nutty: 0.1,
     body: 0.9,
     aroma: 0.2,
-    decaf: 1,
+    milk: 1,
   })
 
   assert.ok(cosineSimilarity(userVector, closeVector) > cosineSimilarity(userVector, distantVector))
@@ -60,7 +60,7 @@ test('calculateSimilarUserScore uses positive reviews from users with similar pr
     menuId: 'menu-a',
     userPreferences: [
       { userId: 'user-b', vector: normalizeTasteVector({ ...userVector, acidity: 0.78 }) },
-      { userId: 'user-c', vector: normalizeTasteVector({ bitterness: 1, decaf: 1 }) },
+      { userId: 'user-c', vector: normalizeTasteVector({ bitterness: 1, milk: 1 }) },
     ],
     reviews: [
       { userId: 'user-b', cafeId: 'cafe-a', menuId: 'menu-a', sentiment: 'positive' },
@@ -86,7 +86,7 @@ test('getRecommendations sorts results by final_score and includes reasons', () 
       {
         cafeId: 'cafe-b',
         menuId: 'menu-bad',
-        tasteVector: normalizeTasteVector({ bitterness: 1, body: 1, decaf: 1 }),
+        tasteVector: normalizeTasteVector({ bitterness: 1, body: 1, milk: 1 }),
         sentimentScore: 0.2,
         reviewCount: 2,
       },

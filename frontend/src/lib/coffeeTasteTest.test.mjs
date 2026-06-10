@@ -16,12 +16,39 @@ test('buildCoffeeTasteVector maps strong acidity preference to a high acidity sc
     body: 0,
     aroma: 1,
     milk: -1,
-    exploration: 1,
   })
 
-  assert.ok(vector.acidity > 0.9)
-  assert.ok(vector.bitterness < 0.1 + 0.09)
-  assert.ok(vector.aroma > 0.9)
+  assert.equal(vector.acidity, 1)
+  assert.equal(vector.bitterness, 0)
+  assert.equal(vector.aroma, 1)
+  assert.equal(vector.milk, 0)
+})
+
+test('buildCoffeeTasteVector keeps milk preference as an independent axis', () => {
+  const black = buildCoffeeTasteVector({
+    acidity: 0,
+    sweetness: 0,
+    bitterness: 0,
+    nutty: 0,
+    body: 0,
+    aroma: 0,
+    milk: -1,
+  })
+  const latte = buildCoffeeTasteVector({
+    acidity: 0,
+    sweetness: 0,
+    bitterness: 0,
+    nutty: 0,
+    body: 0,
+    aroma: 0,
+    milk: 1,
+  })
+
+  assert.equal(black.sweetness, latte.sweetness)
+  assert.equal(black.bitterness, latte.bitterness)
+  assert.equal(black.body, latte.body)
+  assert.equal(black.milk, 0)
+  assert.equal(latte.milk, 1)
 })
 
 test('buildCoffeeRecommendationWeights keeps recommendation weights normalized', () => {
@@ -33,7 +60,6 @@ test('buildCoffeeRecommendationWeights keeps recommendation weights normalized',
     body: 1,
     aroma: 1,
     milk: 0,
-    exploration: 1,
   })
   const total = weights.tasteMatch + weights.similarUser + weights.sentiment + weights.popularity
 
@@ -50,7 +76,6 @@ test('buildCoffeeTasteTestResult returns vector, weights, and timestamp', () => 
     body: 0,
     aroma: 0,
     milk: 0,
-    exploration: 0,
   })
 
   assert.equal(result.vector.acidity, 0.5)

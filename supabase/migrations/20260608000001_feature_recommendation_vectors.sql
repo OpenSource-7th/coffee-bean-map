@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS public.user_taste_profiles (
   nutty      NUMERIC(4,3) NOT NULL DEFAULT 0 CHECK (nutty >= 0 AND nutty <= 1),
   body       NUMERIC(4,3) NOT NULL DEFAULT 0 CHECK (body >= 0 AND body <= 1),
   aroma      NUMERIC(4,3) NOT NULL DEFAULT 0 CHECK (aroma >= 0 AND aroma <= 1),
-  decaf      NUMERIC(4,3) NOT NULL DEFAULT 0 CHECK (decaf >= 0 AND decaf <= 1),
+  milk       NUMERIC(4,3) NOT NULL DEFAULT 0 CHECK (milk >= 0 AND milk <= 1),
   taste_match_weight NUMERIC(5,4) NOT NULL DEFAULT 0.5000 CHECK (taste_match_weight >= 0 AND taste_match_weight <= 1),
   similar_user_weight NUMERIC(5,4) NOT NULL DEFAULT 0.3000 CHECK (similar_user_weight >= 0 AND similar_user_weight <= 1),
   sentiment_weight NUMERIC(5,4) NOT NULL DEFAULT 0.1500 CHECK (sentiment_weight >= 0 AND sentiment_weight <= 1),
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS public.menu_taste_profiles (
   nutty_score      NUMERIC(4,3) NOT NULL DEFAULT 0 CHECK (nutty_score >= 0 AND nutty_score <= 1),
   body_score       NUMERIC(4,3) NOT NULL DEFAULT 0 CHECK (body_score >= 0 AND body_score <= 1),
   aroma_score      NUMERIC(4,3) NOT NULL DEFAULT 0 CHECK (aroma_score >= 0 AND aroma_score <= 1),
-  decaf_score      NUMERIC(4,3) NOT NULL DEFAULT 0 CHECK (decaf_score >= 0 AND decaf_score <= 1),
+  milk_score       NUMERIC(4,3) NOT NULL DEFAULT 0 CHECK (milk_score >= 0 AND milk_score <= 1),
   created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   UNIQUE (cafe_id, menu_id)

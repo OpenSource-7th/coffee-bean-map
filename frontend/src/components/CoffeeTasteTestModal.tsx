@@ -40,7 +40,7 @@ export default function CoffeeTasteTestModal({ userId, onClose, onComplete }: Pr
           nutty: result.vector.nutty,
           body: result.vector.body,
           aroma: result.vector.aroma,
-          decaf: result.vector.decaf,
+          milk: result.vector.milk,
           taste_match_weight: result.weights.tasteMatch,
           similar_user_weight: result.weights.similarUser,
           sentiment_weight: result.weights.sentiment,

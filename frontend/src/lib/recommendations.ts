@@ -5,7 +5,7 @@ export const TASTE_VECTOR_KEYS = [
   'nutty',
   'body',
   'aroma',
-  'decaf',
+  'milk',
 ] as const
 
 export type TasteVectorKey = (typeof TASTE_VECTOR_KEYS)[number]
@@ -79,7 +79,7 @@ const TASTE_LABELS: Record<TasteVectorKey, string> = {
   nutty: '고소함',
   body: '바디감',
   aroma: '향',
-  decaf: '디카페인 선호',
+  milk: '우유가 들어간 커피 선호',
 }
 
 function clamp01(value: number): number {

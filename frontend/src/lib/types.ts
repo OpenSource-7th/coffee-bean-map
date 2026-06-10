@@ -61,7 +61,7 @@ export interface UserTasteProfile {
   nutty: number
   body: number
   aroma: number
-  decaf: number
+  milk: number
   taste_match_weight: number
   similar_user_weight: number
   sentiment_weight: number
@@ -79,7 +79,7 @@ export interface MenuTasteProfile {
   nutty_score: number
   body_score: number
   aroma_score: number
-  decaf_score: number
+  milk_score: number
   created_at: string
   updated_at: string
 }

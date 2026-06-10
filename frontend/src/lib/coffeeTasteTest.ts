@@ -107,17 +107,6 @@ export const COFFEE_TASTE_QUESTIONS: CoffeeTasteQuestion[] = [
       { label: '라떼류', value: 1 },
     ],
   },
-  {
-    id: 'exploration',
-    question: '새로운 원두나 독특한 메뉴를 시도하는 걸 좋아하나요?',
-    options: [
-      { label: '익숙한 것만', value: -1 },
-      { label: '거의 익숙한 것', value: -0.5 },
-      { label: '가끔 시도', value: 0 },
-      { label: '자주 시도', value: 0.5 },
-      { label: '적극적으로 시도', value: 1 },
-    ],
-  },
 ]
 
 function clamp01(value: number): number {
@@ -133,7 +122,7 @@ function normalizeVector(vector: Partial<TasteVector>): TasteVector {
     nutty: clamp01(Number(vector.nutty ?? 0)),
     body: clamp01(Number(vector.body ?? 0)),
     aroma: clamp01(Number(vector.aroma ?? 0)),
-    decaf: clamp01(Number(vector.decaf ?? 0)),
+    milk: clamp01(Number(vector.milk ?? 0)),
   }
 }
 
@@ -154,31 +143,27 @@ function normalizeWeights(weights: RecommendationWeights): RecommendationWeights
 }
 
 export function buildCoffeeTasteVector(answers: CoffeeTasteAnswers): TasteVector {
-  const milk = answers.milk ?? 0
-  const exploration = answers.exploration ?? 0
-
   return normalizeVector({
-    acidity: answerToScore(answers.acidity) + Math.max(0, exploration) * 0.08,
-    sweetness: answerToScore(answers.sweetness) + Math.max(0, milk) * 0.08,
-    bitterness: answerToScore(answers.bitterness) + Math.max(0, -milk) * 0.08,
+    acidity: answerToScore(answers.acidity),
+    sweetness: answerToScore(answers.sweetness),
+    bitterness: answerToScore(answers.bitterness),
     nutty: answerToScore(answers.nutty),
-    body: answerToScore(answers.body) + Math.max(0, milk) * 0.05,
-    aroma: answerToScore(answers.aroma) + Math.max(0, exploration) * 0.06,
-    decaf: 0,
+    body: answerToScore(answers.body),
+    aroma: answerToScore(answers.aroma),
+    milk: answerToScore(answers.milk),
   })
 }
 
 export function buildCoffeeRecommendationWeights(answers: CoffeeTasteAnswers): RecommendationWeights {
-  const tasteAnswerIds = ['acidity', 'sweetness', 'bitterness', 'nutty', 'body', 'aroma']
+  const tasteAnswerIds = ['acidity', 'sweetness', 'bitterness', 'nutty', 'body', 'aroma', 'milk']
   const preferenceStrength =
     tasteAnswerIds.reduce((sum, id) => sum + Math.abs(answers[id] ?? 0), 0) / tasteAnswerIds.length
-  const explorationScore = answerToScore(answers.exploration)
 
   return normalizeWeights({
-    tasteMatch: 0.45 + preferenceStrength * 0.14,
-    similarUser: 0.26 + explorationScore * 0.08,
-    sentiment: 0.17,
-    popularity: 0.12 - explorationScore * 0.06,
+    tasteMatch: 0.5 + preferenceStrength * 0.1,
+    similarUser: 0.3,
+    sentiment: 0.15,
+    popularity: 0.05,
   })
 }
 
@@ -198,6 +183,15 @@ export function loadCoffeeTasteTestResult(): CoffeeTasteTestResult | null {
     const raw = window.localStorage.getItem(COFFEE_TASTE_TEST_STORAGE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as CoffeeTasteTestResult
+
+    if (!('milk' in parsed.vector) || 'exploration' in parsed.answers) {
+      return {
+        ...parsed,
+        vector: buildCoffeeTasteVector(parsed.answers),
+        weights: buildCoffeeRecommendationWeights(parsed.answers),
+      }
+    }
+
     return {
       ...parsed,
       vector: normalizeVector(parsed.vector),

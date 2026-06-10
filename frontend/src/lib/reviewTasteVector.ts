@@ -6,6 +6,12 @@ export interface TasteReviewInput {
   sentiment?: RecommendationSentiment | null
 }
 
+export interface UserTasteReviewInput {
+  reviewText: string
+  sentiment?: RecommendationSentiment | null
+  createdAt?: string
+}
+
 interface KeywordRule {
   keywords: string[]
   scores: Partial<TasteVector>
@@ -37,8 +43,8 @@ const POSITIVE_RULES: KeywordRule[] = [
     scores: { aroma: 0.88 },
   },
   {
-    keywords: ['디카페인', '디카페'],
-    scores: { decaf: 1 },
+    keywords: ['라떼', '우유', '밀크', '플랫화이트', '카푸치노', '크리미', '크림'],
+    scores: { milk: 0.92 },
   },
 ]
 
@@ -61,7 +67,7 @@ const NEGATIVE_RULES: KeywordRule[] = [
   },
 ]
 
-const AXES: (keyof TasteVector)[] = ['acidity', 'sweetness', 'bitterness', 'nutty', 'body', 'aroma', 'decaf']
+const AXES: (keyof TasteVector)[] = ['acidity', 'sweetness', 'bitterness', 'nutty', 'body', 'aroma', 'milk']
 
 function clamp01(value: number): number {
   if (Number.isNaN(value)) return 0
@@ -76,7 +82,7 @@ function normalizeVector(vector: Partial<TasteVector>): TasteVector {
     nutty: clamp01(Number(vector.nutty ?? 0)),
     body: clamp01(Number(vector.body ?? 0)),
     aroma: clamp01(Number(vector.aroma ?? 0)),
-    decaf: clamp01(Number(vector.decaf ?? 0)),
+    milk: clamp01(Number(vector.milk ?? 0)),
   }
 }
 
@@ -170,4 +176,47 @@ export function buildMenuTasteVectorsFromReviews(reviews: TasteReviewInput[]): M
   })
 
   return result
+}
+
+export function adjustTasteVectorFromRecentReviews(
+  baseVector: TasteVector,
+  reviews: UserTasteReviewInput[],
+  maxReviews = 50
+): TasteVector {
+  const recentReviews = [...reviews]
+    .sort((a, b) => {
+      if (!a.createdAt || !b.createdAt) return 0
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    })
+    .slice(0, maxReviews)
+
+  const signedSums: Partial<TasteVector> = {}
+  const evidenceWeights: Partial<TasteVector> = {}
+
+  recentReviews.forEach((review, index) => {
+    const sentimentSign = review.sentiment === 'positive' ? 1 : review.sentiment === 'negative' ? -1 : 0
+    if (sentimentSign === 0) return
+
+    const vector = extractTasteVectorFromReview(review.reviewText, review.sentiment)
+    if (!vector) return
+
+    const recencyWeight = recentReviews.length <= 1
+      ? 1
+      : 1 - (index / (recentReviews.length - 1)) * 0.5
+
+    for (const axis of AXES) {
+      if (vector[axis] <= 0) continue
+      signedSums[axis] = (signedSums[axis] ?? 0) + sentimentSign * vector[axis] * recencyWeight
+      evidenceWeights[axis] = (evidenceWeights[axis] ?? 0) + recencyWeight
+    }
+  })
+
+  return normalizeVector(
+    AXES.reduce((adjusted, axis) => {
+      const evidenceWeight = evidenceWeights[axis] ?? 0
+      const averageEvidence = evidenceWeight > 0 ? (signedSums[axis] ?? 0) / evidenceWeight : 0
+      adjusted[axis] = baseVector[axis] + averageEvidence * 0.15
+      return adjusted
+    }, {} as Partial<TasteVector>)
+  )
 }

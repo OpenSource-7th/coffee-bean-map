@@ -10,7 +10,10 @@ import {
   type TasteVector,
   type UserPreference,
 } from '@/lib/recommendations'
-import { buildMenuTasteVectorsFromReviews } from '@/lib/reviewTasteVector'
+import {
+  adjustTasteVectorFromRecentReviews,
+  buildMenuTasteVectorsFromReviews,
+} from '@/lib/reviewTasteVector'
 
 interface UseRecommendationsParams {
   userId: string | null
@@ -35,7 +38,7 @@ interface RawUserTasteProfile {
   nutty: number | null
   body: number | null
   aroma: number | null
-  decaf: number | null
+  milk: number | null
   taste_match_weight?: number | null
   similar_user_weight?: number | null
   sentiment_weight?: number | null
@@ -51,7 +54,7 @@ interface RawMenuTasteProfile {
   nutty_score: number | null
   body_score: number | null
   aroma_score: number | null
-  decaf_score: number | null
+  milk_score: number | null
 }
 
 interface RawMenu {
@@ -78,6 +81,7 @@ interface RawReview {
   review_text: string | null
   sentiment: 'positive' | 'neutral' | 'negative' | null
   confidence_score: number | null
+  created_at?: string
 }
 
 interface QueryResult<T> {
@@ -102,7 +106,7 @@ function tasteVectorFromUserProfile(profile: RawUserTasteProfile): TasteVector {
     nutty: profile.nutty ?? 0,
     body: profile.body ?? 0,
     aroma: profile.aroma ?? 0,
-    decaf: profile.decaf ?? 0,
+    milk: profile.milk ?? 0,
   })
 }
 
@@ -132,7 +136,7 @@ function tasteVectorFromMenuProfile(profile: RawMenuTasteProfile): TasteVector {
     nutty: profile.nutty_score ?? 0,
     body: profile.body_score ?? 0,
     aroma: profile.aroma_score ?? 0,
-    decaf: profile.decaf_score ?? 0,
+    milk: profile.milk_score ?? 0,
   })
 }
 
@@ -140,6 +144,17 @@ function cafeNameFromMenu(menu: RawMenu | undefined): string | null {
   const cafes = menu?.cafes
   if (Array.isArray(cafes)) return cafes[0]?.name ?? null
   return cafes?.name ?? null
+}
+
+function inferMilkScoreFromMenuName(menuName: string | null | undefined): number {
+  const name = menuName?.toLowerCase() ?? ''
+  return (
+    name.includes('라떼')
+    || name.includes('latte')
+    || name.includes('flat')
+    || name.includes('플랫화이트')
+    || name.includes('카푸치노')
+  ) ? 0.95 : 0.05
 }
 
 function inferTasteVectorFromMenuName(menuName: string): TasteVector {
@@ -153,7 +168,7 @@ function inferTasteVectorFromMenuName(menuName: string): TasteVector {
       nutty: 0.68,
       body: 0.75,
       aroma: 0.55,
-      decaf: 0,
+      milk: 0.95,
     })
   }
 
@@ -165,7 +180,7 @@ function inferTasteVectorFromMenuName(menuName: string): TasteVector {
       nutty: 0.58,
       body: 0.62,
       aroma: 0.58,
-      decaf: 0,
+      milk: 0.05,
     })
   }
 
@@ -177,7 +192,7 @@ function inferTasteVectorFromMenuName(menuName: string): TasteVector {
       nutty: 0.45,
       body: 0.42,
       aroma: 0.82,
-      decaf: 0,
+      milk: 0.02,
     })
   }
 
@@ -189,7 +204,7 @@ function inferTasteVectorFromMenuName(menuName: string): TasteVector {
       nutty: 0.58,
       body: 0.88,
       aroma: 0.78,
-      decaf: 0,
+      milk: 0.02,
     })
   }
 
@@ -200,7 +215,7 @@ function inferTasteVectorFromMenuName(menuName: string): TasteVector {
     nutty: 0.56,
     body: 0.58,
     aroma: 0.62,
-    decaf: 0,
+    milk: 0.05,
   })
 }
 
@@ -232,6 +247,7 @@ export function useRecommendations({
         menusResult,
         menuScoresResult,
         reviewsResult,
+        recentUserReviewsResult,
       ] = await Promise.all([
         userId
           ? supabase.from('user_taste_profiles').select('*').eq('user_id', userId).maybeSingle()
@@ -247,12 +263,22 @@ export function useRecommendations({
           .select('user_id, cafe_id, menu_id, review_text, sentiment, confidence_score')
           .not('menu_id', 'is', null)
           .not('sentiment', 'is', null),
+        userId
+          ? supabase
+              .from('reviews')
+              .select('user_id, cafe_id, menu_id, review_text, sentiment, confidence_score, created_at')
+              .eq('user_id', userId)
+              .not('sentiment', 'is', null)
+              .order('created_at', { ascending: false })
+              .limit(50)
+          : Promise.resolve({ data: [], error: null }),
       ]) as [
         QueryResult<RawUserTasteProfile>,
         QueryResult<RawUserTasteProfile[]>,
         QueryResult<RawMenuTasteProfile[]>,
         QueryResult<RawMenu[]>,
         QueryResult<RawMenuScore[]>,
+        QueryResult<RawReview[]>,
         QueryResult<RawReview[]>,
       ]
 
@@ -263,6 +289,7 @@ export function useRecommendations({
         ?? menusResult.error
         ?? menuScoresResult.error
         ?? reviewsResult.error
+        ?? recentUserReviewsResult.error
 
       if (firstError) throw new Error(firstError.message)
       if (!userVector && !userProfileResult.data) {
@@ -271,7 +298,17 @@ export function useRecommendations({
       }
 
       const userProfile = userProfileResult.data as RawUserTasteProfile | null
-      const currentUserVector = userVector ? normalizeTasteVector(userVector) : tasteVectorFromUserProfile(userProfile!)
+      const baseUserVector = userVector ? normalizeTasteVector(userVector) : tasteVectorFromUserProfile(userProfile!)
+      const currentUserVector = adjustTasteVectorFromRecentReviews(
+        baseUserVector,
+        ((recentUserReviewsResult.data ?? []) as RawReview[])
+          .filter((review): review is RawReview & { review_text: string } => typeof review.review_text === 'string')
+          .map((review) => ({
+            reviewText: review.review_text,
+            sentiment: review.sentiment,
+            createdAt: review.created_at,
+          }))
+      )
       const recommendationWeights = weights ?? weightsFromUserProfile(userProfile)
       const menusById = new Map(
         ((menusResult.data ?? []) as unknown as RawMenu[]).map((menu) => [menu.id, menu])
@@ -307,7 +344,10 @@ export function useRecommendations({
             menuId: profile.menu_id,
             cafeName: cafeNameFromMenu(menu),
             menuName: menu?.menu_name ?? null,
-            tasteVector: tasteVectorFromMenuProfile(profile),
+            tasteVector: normalizeTasteVector({
+              ...tasteVectorFromMenuProfile(profile),
+              milk: Math.max(profile.milk_score ?? 0, inferMilkScoreFromMenuName(menu?.menu_name)),
+            }),
             sentimentScore: score?.bayesian_score ?? score?.weighted_score ?? null,
             reviewCount,
           })
